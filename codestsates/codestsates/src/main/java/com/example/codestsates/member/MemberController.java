@@ -1,5 +1,6 @@
 package com.example.codestsates.member;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,19 +12,20 @@ import java.util.Map;
 @RequestMapping("v1/members")
 public class MemberController {
     @PostMapping
-    public ResponseEntity postMember(
-                                     @RequestParam("email") String email,
-                                     @RequestParam("name") String name,
-                                     @RequestParam("phone") String phone) {
-        System.out.println("# email: " + email);
-        System.out.println("# name: " + name);
-        System.out.println("# phone: " + phone);
-
-        Map<String, String> map = new HashMap<>();
-        map.put("email",email);
-        map.put("name",name);
-        map.put("phone",phone);
-        return new ResponseEntity<>(map, HttpStatus.CREATED);
+    public ResponseEntity postMember(@RequestBody @Valid MemberPostDto memberPostDto){
+//        String email = memberPostDto.getEmail();
+//        System.out.println(email);
+//        int count = 0;
+//        for(char c : email.toCharArray()){
+//            if(c=='@') count++;
+//        }
+//
+//        String name = memberPostDto.getName();
+//
+//        if(count!=1 || email.indexOf('@')==0 || name.contains(" ")){
+//            return  new ResponseEntity(HttpStatus.NOT_ACCEPTABLE);
+//        }
+        return new ResponseEntity<>(memberPostDto, HttpStatus.CREATED);
 }
 
 @GetMapping("/{member-id}")
