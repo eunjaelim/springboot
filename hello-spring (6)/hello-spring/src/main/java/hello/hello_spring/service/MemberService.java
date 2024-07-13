@@ -3,15 +3,19 @@ package hello.hello_spring.service;
 import hello.hello_spring.domain.Member;
 import hello.hello_spring.repository.MemberRepository;
 import hello.hello_spring.repository.MemoryMemberRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+
 
 public class MemberService {
 
     // 이 필드는 클래스 내부에서만 접근 가능하며, 한 번 초기화된 후에는 변경할 수 없습니다.
     // MemoryMemberRepository 클래스의 인스턴스를 생성하여 memberRepository 필드에 할당
     private final MemberRepository memberRepository;
+
 
     public MemberService(MemberRepository memberRepository) {
         this.memberRepository = memberRepository;
