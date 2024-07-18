@@ -29,9 +29,17 @@ public class MemberService {
     }
 
     public Member updateMember(Member member) {
-        findverifiedMember(member.getMemberId());
-        Member updatedMember = memberRepository.save(member);
-        return updatedMember;
+        Member findMember = findverifiedMember(member.getMemberId());
+
+        findMember.setName(member.getName());
+
+//        if(member.getName() != null) findMember.setName(member.getName());
+//        if(member.getPhone()!= null) findMember.setPhone(member.getPhone());
+        Optional.ofNullable(member.getName())
+                .ifPresent(name -> findMember.setName(name));
+        Optional.ofNullable(member.getPhone())
+                .ifPresent(phone -> findMember.setName(phone));
+        return memberRepository.save(findMember);
     }
 
     public Member findMember(long memberId) {
