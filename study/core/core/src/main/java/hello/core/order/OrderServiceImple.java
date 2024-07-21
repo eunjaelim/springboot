@@ -8,9 +8,16 @@ import hello.core.member.MemoryMemberRepository;
 
 public class OrderServiceImple implements OrderService{
 
-    private final MemberRepository memberRepository = new MemoryMemberRepository();
-//  private final DiscountPolicy discountPolicy = new FixDiscountPolicy(); // FixDiscountPolicy 구현 종속성 주입
-    DiscountPolicy discountPolicy;
+    private final MemberRepository memberRepository;
+    private final DiscountPolicy discountPolicy;
+
+    public OrderServiceImple(MemberRepository memberRepository, DiscountPolicy discountPolicy) {  
+        this.memberRepository = memberRepository;
+        this.discountPolicy = discountPolicy;
+    }
+
+    // FixDiscountPolicy 구현 종속성 주입
+//    DiscountPolicy discountPolicy;
 
     @Override
     public Order createOrder(Long memberId, String itemName, int itemPrice) {
