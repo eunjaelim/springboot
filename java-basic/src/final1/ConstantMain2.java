@@ -7,7 +7,7 @@ public class ConstantMain2 {
         process(currentUserCount++);
         process(currentUserCount++);
         process(currentUserCount++);
-   
+
 
     }
     private static void process(int currentUserCount){
