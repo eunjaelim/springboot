@@ -17,13 +17,15 @@ public class JpaMain {
 
         try {
 
-            // 영속성 컨테이너에 쌓임
-            Member member = new Member(200L,"member200");
-            em.persist(member);
+            Member member = em.find(Member.class, 150L);
+            member.setName("AAAAA");
 
-            em.flush();
+            Member member2 = em.find(Member.class, 150L);
 
-            System.out.println("===================");
+//            em.detach(member);
+//            em.clear();
+//            em.close();
+            System.out.prdintln("===================");
 
             tx.commit();
         }catch (Exception e){
