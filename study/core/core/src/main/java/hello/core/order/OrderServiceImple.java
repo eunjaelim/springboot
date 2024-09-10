@@ -29,4 +29,7 @@ public class OrderServiceImple implements OrderService{
 
 
     }
+    public MemberRepository getMemberRepository() {
+        return memberRepository;
+    }
 }
