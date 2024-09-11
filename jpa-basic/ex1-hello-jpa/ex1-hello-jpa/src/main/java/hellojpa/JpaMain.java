@@ -25,7 +25,7 @@ public class JpaMain {
 //            em.detach(member);
 //            em.clear();
 //            em.close();
-            System.out.prdintln("===================");
+            System.out.println("=========================");
 
             tx.commit();
         }catch (Exception e){
