@@ -14,6 +14,9 @@ import java.util.Date;
 @Setter
 @NoArgsConstructor
 @Entity
+// 얘가 주인 수정은 얘만 가능
+// 누구를 주인? - 외래키가 있는 곳을 주인으로!
+// 다인쪽 이 무조건 주인
 @Table(name = "MEMBER")
 public class Member {
     @Id @GeneratedValue

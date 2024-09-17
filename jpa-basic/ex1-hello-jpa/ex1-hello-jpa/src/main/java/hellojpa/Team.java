@@ -5,10 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
+import javax.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -21,4 +20,9 @@ public class Team {
     @Column(name="TEAM_ID")
     private Long id;
     private String name;
+
+    // 얘는 그냥 by로 참조되는것, 주인 아님, 읽기만 가능함
+    @OneToMany(mappedBy = "team")
+    private List<Member> members = new ArrayList<>();
+
 }
