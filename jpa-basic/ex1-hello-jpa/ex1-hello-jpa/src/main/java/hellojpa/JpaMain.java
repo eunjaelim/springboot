@@ -15,25 +15,23 @@ public class JpaMain {
         tx.begin();
 
         try {
-            // Member 객체 생성
-            Member member1 = new Member();
-            member1.setUsername("A");
 
-            Member member2 = new Member();
-            member2.setUsername("B");
+            Team team =  new Team();
+            team.setName("TeamA");
+            em.persist(team);
 
-            Member member3 = new Member();
-            member3.setUsername("C");
+            Member member = new Member();
+            member.setUsername("member1");
+            member.setTeam(team);
+            em.persist(member);
 
-            // Member 객체를 영속성 컨텍스트에 저장 (주석 해제)
-            em.persist(member1);
-            em.persist(member2);
-            em.persist(member3);
+            Member findMember =  em.find(Member.class, member.getId());
 
-            // 자동 생성된 ID 확인
-            System.out.println("member1.id = " + member1.getId());
-            System.out.println("member2.id = " + member2.getId());
-            System.out.println("member3.id = " + member3.getId());
+            Team  findTeam = findMember.getTeam();
+            System.out.println("findTeam = " + findTeam.getName());
+
+            Team newTeam = em.find(Team.class, 100L);
+            findMember.setTeam(newTeam);
 
             tx.commit();
         } catch (Exception e) {
