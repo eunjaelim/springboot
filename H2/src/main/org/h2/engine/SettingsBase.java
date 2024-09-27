@@ -1,11 +1,15 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.engine;
 
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.h2.api.ErrorCode;
 import org.h2.message.DbException;
@@ -40,6 +44,16 @@ public class SettingsBase {
     }
 
     /**
+     * Set an entry in the key-value pair.
+     *
+     * @param key the key
+     * @param value the value
+     */
+    void set(String key, boolean value) {
+        settings.put(key, Boolean.toString(value));
+    }
+
+    /**
      * Get the setting for the given key.
      *
      * @param key the key
@@ -70,7 +84,8 @@ public class SettingsBase {
         }
         StringBuilder buff = new StringBuilder("h2.");
         boolean nextUpper = false;
-        for (char c : key.toCharArray()) {
+        for (int i = 0, l = key.length(); i < l; i++) {
+            char c = key.charAt(i);
             if (c == '_') {
                 nextUpper = true;
             } else {
@@ -102,6 +117,18 @@ public class SettingsBase {
      */
     public HashMap<String, String> getSettings() {
         return settings;
+    }
+
+    /**
+     * Get all settings in alphabetical order.
+     *
+     * @return the settings
+     */
+    public Entry<String, String>[] getSortedSettings() {
+        @SuppressWarnings("unchecked")
+        Map.Entry<String, String>[] entries = settings.entrySet().toArray(new Map.Entry[0]);
+        Arrays.sort(entries, Comparator.comparing(Entry::getKey));
+        return entries;
     }
 
 }

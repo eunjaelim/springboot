@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.test.unit;
@@ -8,13 +8,13 @@ package org.h2.test.unit;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.util.Date;
 import java.util.Random;
-import org.h2.expression.function.DateTimeFunctions;
+
+import org.h2.expression.function.DateTimeFormatFunction;
 import org.h2.message.DbException;
 import org.h2.test.TestBase;
-import org.h2.test.utils.AssertThrows;
 import org.h2.util.StringUtils;
+import org.h2.value.ValueTimestampTimeZone;
 
 /**
  * Tests string utility methods.
@@ -27,7 +27,7 @@ public class TestStringUtils extends TestBase {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -42,6 +42,7 @@ public class TestStringUtils extends TestBase {
         testReplaceAll();
         testTrim();
         testTrimSubstring();
+        testTruncateString();
     }
 
     private void testParseUInt31() {
@@ -80,18 +81,9 @@ public class TestStringUtils extends TestBase {
                 StringUtils.convertHexToBytes("fAcE"));
         assertEquals(new byte[] { (byte) 0xfa, (byte) 0xce },
                 StringUtils.convertHexToBytes("FaCe"));
-        new AssertThrows(DbException.class) { @Override
-        public void test() {
-            StringUtils.convertHexToBytes("120");
-        }};
-        new AssertThrows(DbException.class) { @Override
-        public void test() {
-            StringUtils.convertHexToBytes("fast");
-        }};
-        new AssertThrows(DbException.class) { @Override
-        public void test() {
-            StringUtils.convertHexToBytes("012=abcf");
-        }};
+        assertThrows(DbException.class, () -> StringUtils.convertHexToBytes("120"));
+        assertThrows(DbException.class, () -> StringUtils.convertHexToBytes("fast"));
+        assertThrows(DbException.class, () -> StringUtils.convertHexToBytes("012=abcf"));
     }
 
     private void testPad() {
@@ -113,7 +105,7 @@ public class TestStringUtils extends TestBase {
                 StringUtils.xmlText("Rand&Blue"));
         assertEquals("&lt;&lt;[[[]]]&gt;&gt;",
                 StringUtils.xmlCData("<<[[[]]]>>"));
-        Date dt = DateTimeFunctions.parseDateTime(
+        ValueTimestampTimeZone dt = DateTimeFormatFunction.parseDateTime(null,
                 "2001-02-03 04:05:06 GMT",
                 "yyyy-MM-dd HH:mm:ss z", "en", "GMT");
         String s = StringUtils.xmlStartDoc()
@@ -123,19 +115,19 @@ public class TestStringUtils extends TestBase {
                     StringUtils.xmlComment("Test Comment\nZeile2")
                     + StringUtils.xmlNode("channel", null,
                         StringUtils.xmlNode("title", null, "H2 Database Engine")
-                        + StringUtils.xmlNode("link", null, "http://www.h2database.com")
+                        + StringUtils.xmlNode("link", null, "https://h2database.com")
                         + StringUtils.xmlNode("description", null, "H2 Database Engine")
                         + StringUtils.xmlNode("language", null, "en-us")
                         + StringUtils.xmlNode("pubDate", null,
-                                DateTimeFunctions.formatDateTime(dt,
+                                DateTimeFormatFunction.formatDateTime(null, dt,
                                 "EEE, d MMM yyyy HH:mm:ss z", "en", "GMT"))
                         + StringUtils.xmlNode("lastBuildDate", null,
-                                DateTimeFunctions.formatDateTime(dt,
+                                DateTimeFormatFunction.formatDateTime(null, dt,
                                 "EEE, d MMM yyyy HH:mm:ss z", "en", "GMT"))
                         + StringUtils.xmlNode("item", null,
                                 StringUtils.xmlNode("title", null,
                                 "New Version 0.9.9.9.9")
-                                + StringUtils.xmlNode("link", null, "http://www.h2database.com")
+                                + StringUtils.xmlNode("link", null, "https://h2database.com")
                                 + StringUtils.xmlNode("description", null,
                                         StringUtils.xmlCData("\nNew Features\nTest\n")))));
         assertEquals(
@@ -149,14 +141,14 @@ public class TestStringUtils extends TestBase {
                         + "    -->\n"
                         + "    <channel>\n"
                         + "        <title>H2 Database Engine</title>\n"
-                        + "        <link>http://www.h2database.com</link>\n"
+                        + "        <link>https://h2database.com</link>\n"
                         + "        <description>H2 Database Engine</description>\n"
                         + "        <language>en-us</language>\n"
                         + "        <pubDate>Sat, 3 Feb 2001 04:05:06 GMT</pubDate>\n"
                         + "        <lastBuildDate>Sat, 3 Feb 2001 04:05:06 GMT</lastBuildDate>\n"
                         + "        <item>\n"
                         + "            <title>New Version 0.9.9.9.9</title>\n"
-                        + "            <link>http://www.h2database.com</link>\n"
+                        + "            <link>https://h2database.com</link>\n"
                         + "            <description>\n"
                         + "                <![CDATA[\n"
                         + "                New Features\n"
@@ -288,15 +280,21 @@ public class TestStringUtils extends TestBase {
         testTrimSubstringImpl("a b", " a b ", 1, 4);
         testTrimSubstringImpl("a b", " a b ", 1, 5);
         testTrimSubstringImpl("b", " a b ", 2, 5);
-        new AssertThrows(StringIndexOutOfBoundsException.class) { @Override
-            public void test() { StringUtils.trimSubstring(" with (", 1, 8); }
-        };
+        assertThrows(StringIndexOutOfBoundsException.class, () -> StringUtils.trimSubstring(" with (", 1, 8));
     }
 
     private void testTrimSubstringImpl(String expected, String string, int startIndex, int endIndex) {
         assertEquals(expected, StringUtils.trimSubstring(string, startIndex, endIndex));
         assertEquals(expected, StringUtils
                 .trimSubstring(new StringBuilder(endIndex - startIndex), string, startIndex, endIndex).toString());
+    }
+
+    private void testTruncateString() {
+        assertEquals("", StringUtils.truncateString("", 1));
+        assertEquals("", StringUtils.truncateString("a", 0));
+        assertEquals("_\ud83d\ude00", StringUtils.truncateString("_\ud83d\ude00", 3));
+        assertEquals("_", StringUtils.truncateString("_\ud83d\ude00", 2));
+        assertEquals("_\ud83d", StringUtils.truncateString("_\ud83d_", 2));
     }
 
 }

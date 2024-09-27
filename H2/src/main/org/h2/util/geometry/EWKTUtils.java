@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.util.geometry;
@@ -24,8 +24,8 @@ import static org.h2.util.geometry.GeometryUtils.Z;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 
+import org.h2.util.StringUtils;
 import org.h2.util.geometry.EWKBUtils.EWKBTarget;
-import org.h2.util.geometry.GeometryUtils.DimensionSystemTarget;
 import org.h2.util.geometry.GeometryUtils.Target;
 
 /**
@@ -44,7 +44,7 @@ public final class EWKTUtils {
      * 0-based type names of geometries, subtract 1 from type code to get index
      * in this array.
      */
-    private static final String[] TYPES = { //
+    static final String[] TYPES = { //
             "POINT", //
             "LINESTRING", //
             "POLYGON", //
@@ -146,31 +146,7 @@ public final class EWKTUtils {
             if (inMulti) {
                 return;
             }
-            switch (type) {
-            case POINT:
-                output.append("POINT");
-                break;
-            case LINE_STRING:
-                output.append("LINESTRING");
-                break;
-            case POLYGON:
-                output.append("POLYGON");
-                break;
-            case MULTI_POINT:
-                output.append("MULTIPOINT");
-                break;
-            case MULTI_LINE_STRING:
-                output.append("MULTILINESTRING");
-                break;
-            case MULTI_POLYGON:
-                output.append("MULTIPOLYGON");
-                break;
-            case GEOMETRY_COLLECTION:
-                output.append("GEOMETRYCOLLECTION");
-                break;
-            default:
-                throw new IllegalArgumentException();
-            }
+            output.append(TYPES[type - 1]);
             switch (dimensionSystem) {
             case DIMENSION_SYSTEM_XYZ:
                 output.append(" Z");
@@ -195,15 +171,18 @@ public final class EWKTUtils {
         }
 
         @Override
-        protected void endCollectionItem(Target target, int index, int total) {
+        protected void endCollectionItem(Target target, int type, int index, int total) {
             if (index + 1 == total) {
                 output.append(')');
             }
         }
 
         @Override
-        protected void endCollection(int type) {
-            if (type != GEOMETRY_COLLECTION) {
+        protected void endObject(int type) {
+            switch (type) {
+            case MULTI_POINT:
+            case MULTI_LINE_STRING:
+            case MULTI_POLYGON:
                 inMulti = false;
             }
         }
@@ -276,7 +255,7 @@ public final class EWKTUtils {
                 while (ewkt.charAt(end - 1) <= ' ') {
                     end--;
                 }
-                srid = Integer.parseInt(ewkt.substring(offset, end).trim());
+                srid = Integer.parseInt(StringUtils.trimSubstring(ewkt, offset, end));
                 offset = idx + 1;
             } else {
                 srid = 0;
@@ -542,11 +521,7 @@ public final class EWKTUtils {
      * @return EWKT representation
      */
     public static String ewkb2ewkt(byte[] ewkb) {
-        // Determine dimension system first
-        DimensionSystemTarget dimensionTarget = new DimensionSystemTarget();
-        EWKBUtils.parseEWKB(ewkb, dimensionTarget);
-        // Write an EWKT
-        return ewkb2ewkt(ewkb, dimensionTarget.getDimensionSystem());
+        return ewkb2ewkt(ewkb, EWKBUtils.getDimensionSystem(ewkb));
     }
 
     /**
@@ -560,8 +535,7 @@ public final class EWKTUtils {
      */
     public static String ewkb2ewkt(byte[] ewkb, int dimensionSystem) {
         StringBuilder output = new StringBuilder();
-        EWKTTarget target = new EWKTTarget(output, dimensionSystem);
-        EWKBUtils.parseEWKB(ewkb, target);
+        EWKBUtils.parseEWKB(ewkb, new EWKTTarget(output, dimensionSystem));
         return output.toString();
     }
 
@@ -573,11 +547,7 @@ public final class EWKTUtils {
      * @return EWKB representation
      */
     public static byte[] ewkt2ewkb(String ewkt) {
-        // Determine dimension system first
-        DimensionSystemTarget dimensionTarget = new DimensionSystemTarget();
-        parseEWKT(ewkt, dimensionTarget);
-        // Write an EWKB
-        return ewkt2ewkb(ewkt, dimensionTarget.getDimensionSystem());
+        return ewkt2ewkb(ewkt, getDimensionSystem(ewkt));
     }
 
     /**
@@ -597,7 +567,7 @@ public final class EWKTUtils {
     }
 
     /**
-     * Parses a EWKB.
+     * Parses a EWKT.
      *
      * @param ewkt
      *            source EWKT
@@ -655,22 +625,24 @@ public final class EWKTUtils {
     /**
      * Formats type and dimension system as a string.
      *
+     * @param builder
+     *            string builder
      * @param type
      *            OGC geometry code format (type + dimensionSystem * 1000)
-     * @return formatted string
+     * @return the specified string builder
      * @throws IllegalArgumentException
      *             if type is not valid
      */
-    public static String formatGeometryTypeAndDimensionSystem(int type) {
+    public static StringBuilder formatGeometryTypeAndDimensionSystem(StringBuilder builder, int type) {
         int t = type % 1_000, d = type / 1_000;
         if (t < POINT || t > GEOMETRY_COLLECTION || d < DIMENSION_SYSTEM_XY || d > DIMENSION_SYSTEM_XYZM) {
             throw new IllegalArgumentException();
         }
-        String result = TYPES[t - 1];
+        builder.append(TYPES[t - 1]);
         if (d != DIMENSION_SYSTEM_XY) {
-            result = result + ' ' + DIMENSION_SYSTEMS[d];
+            builder.append(' ').append(DIMENSION_SYSTEMS[d]);
         }
-        return result;
+        return builder;
     }
 
     /**
@@ -787,13 +759,9 @@ public final class EWKTUtils {
             break;
         }
         case MULTI_POINT:
-            parseCollection(source, target, MULTI_POINT, parentType, dimensionSystem);
-            break;
         case MULTI_LINE_STRING:
-            parseCollection(source, target, MULTI_LINE_STRING, parentType, dimensionSystem);
-            break;
         case MULTI_POLYGON:
-            parseCollection(source, target, MULTI_POLYGON, parentType, dimensionSystem);
+            parseCollection(source, target, type, parentType, dimensionSystem);
             break;
         case GEOMETRY_COLLECTION:
             parseCollection(source, target, GEOMETRY_COLLECTION, parentType, 0);
@@ -801,6 +769,7 @@ public final class EWKTUtils {
         default:
             throw new IllegalArgumentException();
         }
+        target.endObject(type);
         if (parentType == 0 && source.hasData()) {
             throw new IllegalArgumentException();
         }
@@ -825,12 +794,11 @@ public final class EWKTUtils {
                     }
                     Target innerTarget = target.startCollectionItem(i, numItems);
                     parseEWKT(source, innerTarget, type, dimensionSystem);
-                    target.endCollectionItem(innerTarget, i, numItems);
+                    target.endCollectionItem(innerTarget, type, i, numItems);
                 }
                 source.read(')');
             }
         }
-        target.endCollection(type);
     }
 
     private static void parseMultiPointAlternative(EWKTSource source, Target target, int dimensionSystem) {
@@ -846,7 +814,7 @@ public final class EWKTUtils {
             target.startPoint();
             double[] c = points.get(i);
             target.addCoordinate(c[X], c[Y], c[Z], c[M], 0, 1);
-            target.endCollectionItem(innerTarget, i, numItems);
+            target.endCollectionItem(innerTarget, MULTI_POINT, i, numItems);
         }
     }
 
@@ -887,35 +855,31 @@ public final class EWKTUtils {
     private static void addCoordinate(EWKTSource source, Target target, int dimensionSystem, int index, int total) {
         double x = source.readCoordinate();
         double y = source.readCoordinate();
-        double z = Double.NaN, m = Double.NaN;
-        if (source.hasCoordinate()) {
-            if (dimensionSystem == DIMENSION_SYSTEM_XYM) {
-                m = source.readCoordinate();
-            } else {
-                z = source.readCoordinate();
-                if (source.hasCoordinate()) {
-                    m = source.readCoordinate();
-                }
-            }
-        }
+        double z = (dimensionSystem & DIMENSION_SYSTEM_XYZ) != 0 ? source.readCoordinate() : Double.NaN;
+        double m = (dimensionSystem & DIMENSION_SYSTEM_XYM) != 0 ? source.readCoordinate() : Double.NaN;
         target.addCoordinate(x, y, z, m, index, total);
     }
 
     private static double[] readCoordinate(EWKTSource source, int dimensionSystem) {
         double x = source.readCoordinate();
         double y = source.readCoordinate();
-        double z = Double.NaN, m = Double.NaN;
-        if (source.hasCoordinate()) {
-            if (dimensionSystem == DIMENSION_SYSTEM_XYM) {
-                m = source.readCoordinate();
-            } else {
-                z = source.readCoordinate();
-                if (source.hasCoordinate()) {
-                    m = source.readCoordinate();
-                }
-            }
-        }
+        double z = (dimensionSystem & DIMENSION_SYSTEM_XYZ) != 0 ? source.readCoordinate() : Double.NaN;
+        double m = (dimensionSystem & DIMENSION_SYSTEM_XYM) != 0 ? source.readCoordinate() : Double.NaN;
         return new double[] { x, y, z, m };
+    }
+
+    /**
+     * Reads the dimension system from EWKT.
+     *
+     * @param ewkt
+     *            EWKT source
+     * @return the dimension system
+     */
+    public static int getDimensionSystem(String ewkt) {
+        EWKTSource source = new EWKTSource(ewkt);
+        source.readSRID();
+        source.readType();
+        return source.readDimensionSystem();
     }
 
     private EWKTUtils() {

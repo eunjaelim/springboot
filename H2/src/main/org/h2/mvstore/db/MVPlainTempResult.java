@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.mvstore.db;
@@ -11,7 +11,9 @@ import org.h2.message.DbException;
 import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVMap.Builder;
+import org.h2.mvstore.type.LongDataType;
 import org.h2.result.ResultExternal;
+import org.h2.result.RowFactory.DefaultRowFactory;
 import org.h2.value.Value;
 import org.h2.value.ValueRow;
 
@@ -49,7 +51,9 @@ class MVPlainTempResult extends MVTempResult {
     }
 
     /**
-     * Creates a new plain temporary result.
+     * Creates a new plain temporary result. This result does not sort its rows,
+     * but it can be used in index-sorted queries and it can preserve additional
+     * columns for WITH TIES processing.
      *
      * @param database
      *            database
@@ -57,12 +61,17 @@ class MVPlainTempResult extends MVTempResult {
      *            column expressions
      * @param visibleColumnCount
      *            count of visible columns
+     * @param resultColumnCount
+     *            the number of columns including visible columns and additional
+     *            virtual columns for ORDER BY clause
      */
-    MVPlainTempResult(Database database, Expression[] expressions, int visibleColumnCount) {
-        super(database, expressions, visibleColumnCount);
-        ValueDataType valueType = new ValueDataType(database, new int[expressions.length]);
-        Builder<Long, ValueRow> builder = new MVMap.Builder<Long, ValueRow>()
-                                                .valueType(valueType).singleWriter();
+    MVPlainTempResult(Database database, Expression[] expressions, int visibleColumnCount, int resultColumnCount) {
+        super(database, expressions, visibleColumnCount, resultColumnCount);
+        ValueDataType valueType = new ValueDataType(database, new int[resultColumnCount]);
+        valueType.setRowFactory(DefaultRowFactory.INSTANCE.createRowFactory(database, database.getCompareMode(),
+                database, expressions, null, false));
+        Builder<Long, ValueRow> builder = new MVMap.Builder<Long, ValueRow>().keyType(LongDataType.INSTANCE)
+                .valueType(valueType).singleWriter();
         map = store.openMap("tmp", builder);
     }
 
@@ -99,11 +108,7 @@ class MVPlainTempResult extends MVTempResult {
             return null;
         }
         cursor.next();
-        Value[] currentRow = cursor.getValue().getList();
-        if (hasEnum) {
-            fixEnum(currentRow);
-        }
-        return currentRow;
+        return cursor.getValue().getList();
     }
 
     @Override

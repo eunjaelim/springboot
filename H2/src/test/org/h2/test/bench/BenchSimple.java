@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.test.bench;
@@ -92,18 +92,8 @@ public class BenchSimple implements Bench {
             db.update(prep, "deleteTest");
         }
         db.end();
-
-        db.closeConnection();
-
-        db.openConnection();
-        prep = db.prepare("SELECT * FROM TEST WHERE ID=?");
-        for (int i = 0; i < records; i++) {
-            prep.setInt(1, random.nextInt(records));
-            db.queryReadResult(prep);
-        }
         db.logMemory(this, "Memory Usage");
         db.closeConnection();
-
     }
 
     @Override

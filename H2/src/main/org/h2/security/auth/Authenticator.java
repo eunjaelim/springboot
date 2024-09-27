@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: Alessandro Ventura
  */
 package org.h2.security.auth;
@@ -20,6 +20,7 @@ public interface Authenticator {
      * @param database target database instance.
      * @return valid database user or null if user doesn't exists in the
      *         database
+     * @throws AuthenticationException on failure
      */
     User authenticate(AuthenticationInfo authenticationInfo, Database database) throws AuthenticationException;
 

@@ -1,27 +1,27 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.constraint;
 
 import java.util.HashSet;
 import org.h2.engine.DbObject;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
+import org.h2.expression.Expression;
 import org.h2.expression.ExpressionVisitor;
 import org.h2.index.Index;
 import org.h2.message.Trace;
 import org.h2.result.Row;
 import org.h2.schema.Schema;
-import org.h2.schema.SchemaObjectBase;
+import org.h2.schema.SchemaObject;
 import org.h2.table.Column;
 import org.h2.table.Table;
 
 /**
  * The base class for constraint checking.
  */
-public abstract class Constraint extends SchemaObjectBase implements
-        Comparable<Constraint> {
+public abstract class Constraint extends SchemaObject implements Comparable<Constraint> {
 
     public enum Type {
         /**
@@ -39,7 +39,11 @@ public abstract class Constraint extends SchemaObjectBase implements
         /**
          * The constraint type for referential constraints.
          */
-        REFERENTIAL;
+        REFERENTIAL,
+        /**
+         * The constraint type for domain constraints.
+         */
+        DOMAIN;
 
         /**
          * Get standard SQL type name.
@@ -47,13 +51,33 @@ public abstract class Constraint extends SchemaObjectBase implements
          * @return standard SQL type name
          */
         public String getSqlName() {
-            if (this == Constraint.Type.PRIMARY_KEY) {
+            if (this == PRIMARY_KEY) {
                 return "PRIMARY KEY";
             }
-            if (this == Constraint.Type.REFERENTIAL) {
+            if (this == REFERENTIAL) {
                 return "FOREIGN KEY";
             }
             return name();
+        }
+
+        /**
+         * Tests whether this type is a check or domain type or not.
+         *
+         * @return {@code true} if this type is a check or a domain type,
+         *         {@code false} otherwise
+         */
+        public boolean isCheck() {
+            return this == CHECK || this == DOMAIN;
+        }
+
+        /**
+         * Tests whether this type is a primary key or unique or not.
+         *
+         * @return {@code true} if this type is a primary key or unique type,
+         *         {@code false} otherwise
+         */
+        public boolean isUnique() {
+            return this == PRIMARY_KEY || this == UNIQUE;
         }
 
     }
@@ -66,7 +90,9 @@ public abstract class Constraint extends SchemaObjectBase implements
     Constraint(Schema schema, int id, String name, Table table) {
         super(schema, id, name, Trace.CONSTRAINT);
         this.table = table;
-        this.setTemporary(table.isTemporary());
+        if (table != null) {
+            this.setTemporary(table.isTemporary());
+        }
     }
 
     /**
@@ -85,7 +111,7 @@ public abstract class Constraint extends SchemaObjectBase implements
      * @param oldRow the old row
      * @param newRow the new row
      */
-    public abstract void checkRow(Session session, Table t, Row oldRow, Row newRow);
+    public abstract void checkRow(SessionLocal session, Table t, Row oldRow, Row newRow);
 
     /**
      * Check if this constraint needs the specified index.
@@ -111,6 +137,15 @@ public abstract class Constraint extends SchemaObjectBase implements
     public abstract HashSet<Column> getReferencedColumns(Table table);
 
     /**
+     * Returns the CHECK expression or null.
+     *
+     * @return the CHECK expression or null.
+     */
+    public Expression getExpression() {
+        return null;
+    }
+
+    /**
      * Get the SQL statement to create this constraint.
      *
      * @return the SQL statement
@@ -130,7 +165,7 @@ public abstract class Constraint extends SchemaObjectBase implements
      *
      * @param session the session
      */
-    public abstract void checkExistingData(Session session);
+    public abstract void checkExistingData(SessionLocal session);
 
     /**
      * This method is called after a related table has changed
@@ -139,16 +174,22 @@ public abstract class Constraint extends SchemaObjectBase implements
     public abstract void rebuild();
 
     /**
-     * Get the unique index used to enforce this constraint, or null if no index
+     * Get the index of this constraint in the source table, or null if no index
      * is used.
      *
      * @return the index
      */
-    public abstract Index getUniqueIndex();
+    public Index getIndex() {
+        return null;
+    }
 
-    @Override
-    public void checkRename() {
-        // ok
+    /**
+     * Returns the referenced unique constraint, or null.
+     *
+     * @return the referenced unique constraint, or null
+     */
+    public ConstraintUnique getReferencedConstraint() {
+        return null;
     }
 
     @Override
@@ -165,21 +206,11 @@ public abstract class Constraint extends SchemaObjectBase implements
     }
 
     @Override
-    public String getDropSQL() {
-        return null;
-    }
-
-    @Override
     public int compareTo(Constraint other) {
         if (this == other) {
             return 0;
         }
         return Integer.compare(getConstraintType().ordinal(), other.getConstraintType().ordinal());
-    }
-
-    @Override
-    public boolean isHidden() {
-        return table.isHidden();
     }
 
     /**

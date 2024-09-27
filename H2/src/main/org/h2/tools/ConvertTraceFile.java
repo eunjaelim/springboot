@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.tools;
@@ -20,9 +20,8 @@ import org.h2.util.Tool;
 
 /**
  * Converts a .trace.db file to a SQL script and Java source code.
- * <br />
+ *
  * SQL statement statistics are listed as well.
- * @h2.resource
  */
 public class ConvertTraceFile extends Tool {
 
@@ -55,8 +54,9 @@ public class ConvertTraceFile extends Tool {
     }
 
     /**
-     * Options are case sensitive. Supported options are:
+     * Options are case sensitive.
      * <table>
+     * <caption>Supported options</caption>
      * <tr><td>[-help] or [-?]</td>
      * <td>Print the list of options</td></tr>
      * <tr><td>[-traceFile &lt;file&gt;]</td>
@@ -66,9 +66,9 @@ public class ConvertTraceFile extends Tool {
      * <tr><td>[-javaClass &lt;file&gt;]</td>
      * <td>The Java directory and class file name (default: Test)</td></tr>
      * </table>
-     * @h2.resource
      *
      * @param args the command line arguments
+     * @throws SQLException on failure
      */
     public static void main(String... args) throws SQLException {
         new ConvertTraceFile().runTool(args);
@@ -107,7 +107,7 @@ public class ConvertTraceFile extends Tool {
     private void convertFile(String traceFileName, String javaClassName,
             String script) throws IOException {
         LineNumberReader reader = new LineNumberReader(
-                IOUtils.getBufferedReader(
+                IOUtils.getReader(
                 FileUtils.newInputStream(traceFileName)));
         PrintWriter javaWriter = new PrintWriter(
                 IOUtils.getBufferedWriter(

@@ -1,30 +1,44 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.value;
 
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.util.Arrays;
-
 import org.h2.api.ErrorCode;
-import org.h2.engine.SysProperties;
+import org.h2.engine.CastDataProvider;
+import org.h2.engine.Constants;
 import org.h2.message.DbException;
+import org.h2.result.SimpleResult;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Row value.
  */
-public class ValueRow extends ValueCollectionBase {
+public final class ValueRow extends ValueCollectionBase {
 
     /**
      * Empty row.
      */
-    private static final Object EMPTY = get(new Value[0]);
+    public static final ValueRow EMPTY = get(Value.EMPTY_VALUES);
 
-    private ValueRow(Value[] list) {
+    private TypeInfo type;
+
+    private ValueRow(TypeInfo type, Value[] list) {
         super(list);
+        int degree = list.length;
+        if (degree > Constants.MAX_COLUMNS) {
+            throw DbException.get(ErrorCode.TOO_MANY_COLUMNS_1, "" + Constants.MAX_COLUMNS);
+        }
+        if (type != null) {
+            if (type.getValueType() != ROW || ((ExtTypeInfoRow) type.getExtTypeInfo()).getFields().size() != degree) {
+                throw DbException.getInternalError();
+            }
+            this.type = type;
+        }
     }
 
     /**
@@ -35,16 +49,40 @@ public class ValueRow extends ValueCollectionBase {
      * @return the value
      */
     public static ValueRow get(Value[] list) {
-        return new ValueRow(list);
+        return new ValueRow(null, list);
     }
 
     /**
-     * Returns empty row.
+     * Get or create a typed row value for the given value array.
+     * Do not clone the data.
      *
-     * @return empty row
+     * @param extTypeInfo the extended data type information
+     * @param list the value array
+     * @return the value
      */
-    public static ValueRow getEmpty() {
-        return (ValueRow) EMPTY;
+    public static ValueRow get(ExtTypeInfoRow extTypeInfo, Value[] list) {
+        return new ValueRow(new TypeInfo(ROW, -1, -1, extTypeInfo), list);
+    }
+
+    /**
+     * Get or create a typed row value for the given value array.
+     * Do not clone the data.
+     *
+     * @param typeInfo the data type information
+     * @param list the value array
+     * @return the value
+     */
+    public static ValueRow get(TypeInfo typeInfo, Value[] list) {
+        return new ValueRow(typeInfo, list);
+    }
+
+    @Override
+    public TypeInfo getType() {
+        TypeInfo type = this.type;
+        if (type == null) {
+            this.type = type = TypeInfo.getTypeInfo(Value.ROW, 0, 0, new ExtTypeInfoRow(values));
+        }
+        return type;
     }
 
     @Override
@@ -64,8 +102,18 @@ public class ValueRow extends ValueCollectionBase {
         return builder.append(')').toString();
     }
 
+    public SimpleResult getResult() {
+        SimpleResult result = new SimpleResult();
+        for (int i = 0, l = values.length; i < l;) {
+            Value v = values[i++];
+            result.addColumn("C" + i, v.getType());
+        }
+        result.addRow(values);
+        return result;
+    }
+
     @Override
-    public int compareTypeSafe(Value o, CompareMode mode) {
+    public int compareTypeSafe(Value o, CompareMode mode, CastDataProvider provider) {
         ValueRow v = (ValueRow) o;
         if (values == v.values) {
             return 0;
@@ -77,7 +125,7 @@ public class ValueRow extends ValueCollectionBase {
         for (int i = 0; i < len; i++) {
             Value v1 = values[i];
             Value v2 = v.values[i];
-            int comp = v1.compareTo(v2, /* TODO */ null, mode);
+            int comp = v1.compareTo(v2, provider, mode);
             if (comp != 0) {
                 return comp;
             }
@@ -86,52 +134,52 @@ public class ValueRow extends ValueCollectionBase {
     }
 
     @Override
-    public Object getObject() {
-        int len = values.length;
-        Object[] list = new Object[len];
-        for (int i = 0; i < len; i++) {
-            final Value value = values[i];
-            if (!SysProperties.OLD_RESULT_SET_GET_OBJECT) {
-                final int type = value.getValueType();
-                if (type == Value.BYTE || type == Value.SHORT) {
-                    list[i] = value.getInt();
-                    continue;
-                }
-            }
-            list[i] = value.getObject();
-        }
-        return list;
-    }
-
-    @Override
-    public void set(PreparedStatement prep, int parameterIndex) throws SQLException {
-        throw getUnsupportedExceptionForOperation("PreparedStatement.set");
-    }
-
-    @Override
-    public StringBuilder getSQL(StringBuilder builder) {
+    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
         builder.append("ROW (");
         int length = values.length;
         for (int i = 0; i < length; i++) {
             if (i > 0) {
                 builder.append(", ");
             }
-            values[i].getSQL(builder);
+            values[i].getSQL(builder, sqlFlags);
         }
         return builder.append(')');
     }
 
-    @Override
-    public String getTraceSQL() {
-        StringBuilder builder = new StringBuilder("ROW (");
-        for (int i = 0; i < values.length; i++) {
-            if (i > 0) {
-                builder.append(", ");
-            }
-            Value v = values[i];
-            builder.append(v == null ? "null" : v.getTraceSQL());
+    /**
+     * Creates a copy of this row but the new instance will contain the {@link #values} according to
+     * {@code newOrder}.<br />
+     * E.g.: ROW('a', 'b').cloneWithOrder([1, 0]) returns ROW('b', 'a')
+     * @param newOrder array of indexes to create the new values array
+     */
+    public ValueRow cloneWithOrder(int[] newOrder) {
+        int length = values.length;
+        if (newOrder.length != values.length) {
+            throw DbException.getInternalError("Length of the new orders is different than values count.");
         }
-        return builder.append(')').toString();
+
+        Value[] newValues = new Value[length];
+        for (int i = 0; i < length; i++) {
+            newValues[i] = values[newOrder[i]];
+        }
+
+        ExtTypeInfoRow typeInfoRow = (ExtTypeInfoRow) type.getExtTypeInfo();
+        Map.Entry<String, TypeInfo>[] fields = typeInfoRow.getFields().toArray(createEntriesArray(length));
+        LinkedHashMap<String, TypeInfo> newFields = new LinkedHashMap<>(length);
+        for (int i = 0; i < length; i++) {
+            Map.Entry<String, TypeInfo> field = fields[newOrder[i]];
+            newFields.put(field.getKey(), field.getValue());
+        }
+        ExtTypeInfoRow newTypeInfoRow = new ExtTypeInfoRow(newFields);
+        TypeInfo newType = new TypeInfo(type.getValueType(), type.getDeclaredPrecision(),
+                type.getDeclaredScale(), newTypeInfoRow);
+
+        return new ValueRow(newType, newValues);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <K,V> Map.Entry<K,V>[] createEntriesArray(int length) {
+        return (Map.Entry<K,V>[])new Map.Entry[length];
     }
 
     @Override
@@ -153,35 +201,6 @@ public class ValueRow extends ValueCollectionBase {
             }
         }
         return true;
-    }
-
-    @Override
-    public Value convertPrecision(long precision, boolean force) {
-        if (!force) {
-            return this;
-        }
-        int length = values.length;
-        Value[] newValues = new Value[length];
-        int i = 0;
-        boolean modified = false;
-        for (; i < length; i++) {
-            Value old = values[i];
-            Value v = old.convertPrecision(precision, true);
-            if (v != old) {
-                modified = true;
-            }
-            // empty byte arrays or strings have precision 0
-            // they count as precision 1 here
-            precision -= Math.max(1, v.getType().getPrecision());
-            if (precision < 0) {
-                break;
-            }
-            newValues[i] = v;
-        }
-        if (i < length) {
-            return get(Arrays.copyOf(newValues, i));
-        }
-        return modified ? get(newValues) : this;
     }
 
 }

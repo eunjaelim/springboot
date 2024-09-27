@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.tools;
@@ -9,7 +9,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import org.h2.util.StringUtils;
 
@@ -22,6 +21,9 @@ public class MultiDimension implements Comparator<long[]> {
 
     private static final MultiDimension INSTANCE = new MultiDimension();
 
+    /**
+     * Protected constructor
+     */
     protected MultiDimension() {
         // don't allow construction by normal code
         // but allow tests
@@ -175,6 +177,7 @@ public class MultiDimension implements Comparator<long[]> {
      * @param min the lower values
      * @param max the upper values
      * @return the result set
+     * @throws SQLException on failure
      */
     public ResultSet getResult(PreparedStatement prep, int[] min, int[] max)
             throws SQLException {
@@ -241,7 +244,7 @@ public class MultiDimension implements Comparator<long[]> {
      * @param total product of the gap lengths
      */
     private void combineEntries(ArrayList<long[]> list, int total) {
-        Collections.sort(list, this);
+        list.sort(this);
         for (int minGap = 10; minGap < total; minGap += minGap / 2) {
             for (int i = 0; i < list.size() - 1; i++) {
                 long[] current = list.get(i);
@@ -310,7 +313,7 @@ public class MultiDimension implements Comparator<long[]> {
     }
 
     private static int roundUp(int x, int blockSizePowerOf2) {
-        return (x + blockSizePowerOf2 - 1) & (-blockSizePowerOf2);
+        return (x + blockSizePowerOf2 - 1) & -blockSizePowerOf2;
     }
 
     private static int findMiddle(int a, int b) {

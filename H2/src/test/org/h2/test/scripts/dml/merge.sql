@@ -1,5 +1,5 @@
--- Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
--- and the EPL 1.0 (http://h2database.com/html/license.html).
+-- Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+-- and the EPL 1.0 (https://h2database.com/html/license.html).
 -- Initial Developer: H2 Group
 --
 
@@ -16,7 +16,7 @@ CREATE TABLE TEST(ID INT PRIMARY KEY, NAME VARCHAR(255));
 > ok
 
 EXPLAIN SELECT * FROM TEST WHERE ID=1;
->> SELECT "TEST"."ID", "TEST"."NAME" FROM "PUBLIC"."TEST" /* PUBLIC.PRIMARY_KEY_2: ID = 1 */ WHERE "ID" = 1
+>> SELECT "PUBLIC"."TEST"."ID", "PUBLIC"."TEST"."NAME" FROM "PUBLIC"."TEST" /* PUBLIC.PRIMARY_KEY_2: ID = 1 */ WHERE "ID" = 1
 
 EXPLAIN MERGE INTO TEST VALUES(1, 'Hello');
 >> MERGE INTO "PUBLIC"."TEST"("ID", "NAME") KEY("ID") VALUES (1, 'Hello')
@@ -104,4 +104,79 @@ MERGE INTO TEST KEY (ID) VALUES (1, 2, 3), (2, 2, 3);
 > exception DUPLICATE_KEY_1
 
 DROP TABLE TEST;
+> ok
+
+CREATE TABLE TEST(A INT, B INT DEFAULT 5);
+> ok
+
+MERGE INTO TEST KEY(A) VALUES (1, DEFAULT);
+> update count: 1
+
+TABLE TEST;
+> A B
+> - -
+> 1 5
+> rows: 1
+
+UPDATE TEST SET B = 1 WHERE A = 1;
+> update count: 1
+
+SELECT B FROM TEST WHERE A = 1;
+>> 1
+
+MERGE INTO TEST KEY(A) VALUES (1, DEFAULT);
+> update count: 1
+
+SELECT B FROM TEST WHERE A = 1;
+>> 5
+
+DROP TABLE TEST;
+> ok
+
+CREATE TABLE TEST(A INT, B INT GENERATED ALWAYS AS (A + 1));
+> ok
+
+MERGE INTO TEST KEY(A) VALUES (1, 1);
+> exception GENERATED_COLUMN_CANNOT_BE_ASSIGNED_1
+
+MERGE INTO TEST KEY(A) VALUES (1, DEFAULT);
+> update count: 1
+
+MERGE INTO TEST KEY(A) VALUES (1, 1);
+> exception GENERATED_COLUMN_CANNOT_BE_ASSIGNED_1
+
+MERGE INTO TEST KEY(A) VALUES (1, DEFAULT);
+> update count: 1
+
+DROP TABLE TEST;
+> ok
+
+CREATE TABLE TEST(ID INT, G INT GENERATED ALWAYS AS (ID + 1));
+> ok
+
+MERGE INTO TEST(G) KEY(ID) VALUES (1);
+> exception SYNTAX_ERROR_2
+
+DROP TABLE TEST;
+> ok
+
+CREATE TABLE T(ID BOOLEAN PRIMARY KEY);
+> ok
+
+INSERT INTO T(ID) VALUES (TRUE);
+> update count: 1
+
+MERGE INTO T(ID) VALUES 2;
+> exception TYPES_ARE_NOT_COMPARABLE_2
+
+SET MODE MySQL;
+> ok
+
+MERGE INTO T(ID) VALUES 2;
+> update count: 1
+
+SET MODE Regular;
+> ok
+
+DROP TABLE T;
 > ok

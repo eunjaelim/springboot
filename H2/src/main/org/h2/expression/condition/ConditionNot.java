@@ -1,13 +1,14 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.expression.condition;
 
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionVisitor;
+import org.h2.expression.TypedValueExpression;
 import org.h2.expression.ValueExpression;
 import org.h2.table.ColumnResolver;
 import org.h2.table.TableFilter;
@@ -26,17 +27,17 @@ public class ConditionNot extends Condition {
     }
 
     @Override
-    public Expression getNotIfPossible(Session session) {
-        return condition;
+    public Expression getNotIfPossible(SessionLocal session) {
+        return castToBoolean(session, condition.optimize(session));
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         Value v = condition.getValue(session);
         if (v == ValueNull.INSTANCE) {
             return v;
         }
-        return v.convertTo(Value.BOOLEAN).negate();
+        return v.convertToBoolean().negate();
     }
 
     @Override
@@ -45,7 +46,7 @@ public class ConditionNot extends Condition {
     }
 
     @Override
-    public Expression optimize(Session session) {
+    public Expression optimize(SessionLocal session) {
         Expression e2 = condition.getNotIfPossible(session);
         if (e2 != null) {
             return e2.optimize(session);
@@ -54,9 +55,9 @@ public class ConditionNot extends Condition {
         if (expr.isConstant()) {
             Value v = expr.getValue(session);
             if (v == ValueNull.INSTANCE) {
-                return ValueExpression.getNull();
+                return TypedValueExpression.UNKNOWN;
             }
-            return ValueExpression.get(v.convertTo(Value.BOOLEAN).negate());
+            return ValueExpression.getBoolean(!v.getBoolean());
         }
         condition = expr;
         return this;
@@ -68,28 +69,18 @@ public class ConditionNot extends Condition {
     }
 
     @Override
-    public StringBuilder getSQL(StringBuilder builder, boolean alwaysQuote) {
-        builder.append("(NOT ");
-        return condition.getSQL(builder, alwaysQuote).append(')');
+    public boolean needParentheses() {
+        return true;
     }
 
     @Override
-    public void updateAggregate(Session session, int stage) {
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
+        return condition.getSQL(builder.append("NOT "), sqlFlags, AUTO_PARENTHESES);
+    }
+
+    @Override
+    public void updateAggregate(SessionLocal session, int stage) {
         condition.updateAggregate(session, stage);
-    }
-
-    @Override
-    public void addFilterConditions(TableFilter filter, boolean outerJoin) {
-        if (outerJoin) {
-            // can not optimize:
-            // select * from test t1 left join test t2 on t1.id = t2.id where
-            // not t2.id is not null
-            // to
-            // select * from test t1 left join test t2 on t1.id = t2.id and
-            // t2.id is not null
-            return;
-        }
-        super.addFilterConditions(filter, outerJoin);
     }
 
     @Override

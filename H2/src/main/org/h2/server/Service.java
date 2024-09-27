@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.server;
@@ -19,6 +19,7 @@ public interface Service {
      * Initialize the service from command line options.
      *
      * @param args the command line options
+     * @throws Exception on failure
      */
     void init(String... args) throws Exception;
 
@@ -32,6 +33,7 @@ public interface Service {
     /**
      * Start the service. This usually means create the server socket.
      * This method must not block.
+     * @throws SQLException on failure
      */
     void start() throws SQLException;
 

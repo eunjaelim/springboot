@@ -1,15 +1,17 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.value;
 
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+import static org.h2.util.Bits.LONG_VH_BE;
+
+import java.time.Instant;
 import java.util.UUID;
 
 import org.h2.api.ErrorCode;
+import org.h2.engine.CastDataProvider;
 import org.h2.message.DbException;
 import org.h2.util.Bits;
 import org.h2.util.MathUtils;
@@ -18,7 +20,7 @@ import org.h2.util.StringUtils;
 /**
  * Implementation of the UUID data type.
  */
-public class ValueUuid extends Value {
+public final class ValueUuid extends Value {
 
     /**
      * The precision of this value in number of bytes.
@@ -46,31 +48,44 @@ public class ValueUuid extends Value {
     /**
      * Create a new UUID using the pseudo random number generator.
      *
+     * @param version
+     *            a version to use
      * @return the new UUID
      */
-    public static ValueUuid getNewRandom() {
-        long high = MathUtils.secureRandomLong();
-        long low = MathUtils.secureRandomLong();
-        // version 4 (random)
-        high = (high & (~0xf000L)) | 0x4000L;
-        // variant (Leach-Salz)
-        low = (low & 0x3fff_ffff_ffff_ffffL) | 0x8000_0000_0000_0000L;
-        return new ValueUuid(high, low);
+    public static ValueUuid getNewRandom(int version) {
+        long high, low;
+        switch (version) {
+        case 4:
+            high = MathUtils.secureRandomLong();
+            low = MathUtils.secureRandomLong();
+            break;
+        case 7: {
+            Instant now = Instant.now();
+            int nanos = now.getNano();
+            int sub = nanos % 1_000_000 * 2_000 / 488_281;
+            high = now.getEpochSecond() * 1_000L + nanos / 1_000_000 << 16 | sub;
+            low = MathUtils.secureRandomLong();
+            break;
+        }
+        default:
+            throw DbException.getInvalidValueException("RANDOM_UUID version", version);
+        }
+        return new ValueUuid((high & ~0xf000L) | version << 12,
+                /* variant 0b10 */ low & 0x3fff_ffff_ffff_ffffL | 0x8000_0000_0000_0000L);
     }
 
     /**
      * Get or create a UUID for the given 16 bytes.
      *
-     * @param binary the byte array (must be at least 16 bytes long)
+     * @param binary the byte array
      * @return the UUID
      */
     public static ValueUuid get(byte[] binary) {
-        if (binary.length < 16) {
-            return get(StringUtils.convertBytesToHex(binary));
+        int length = binary.length;
+        if (length != 16) {
+            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, "UUID requires 16 bytes, got " + length);
         }
-        long high = Bits.readLong(binary, 0);
-        long low = Bits.readLong(binary, 8);
-        return (ValueUuid) Value.cache(new ValueUuid(high, low));
+        return get((long) LONG_VH_BE.get(binary, 0), (long) LONG_VH_BE.get(binary, 8));
     }
 
     /**
@@ -102,33 +117,36 @@ public class ValueUuid extends Value {
      */
     public static ValueUuid get(String s) {
         long low = 0, high = 0;
-        for (int i = 0, j = 0, length = s.length(); i < length; i++) {
+        int j = 0;
+        for (int i = 0, length = s.length(); i < length; i++) {
             char c = s.charAt(i);
             if (c >= '0' && c <= '9') {
                 low = (low << 4) | (c - '0');
             } else if (c >= 'a' && c <= 'f') {
-                low = (low << 4) | (c - 'a' + 0xa);
+                low = (low << 4) | (c - ('a' - 0xa));
             } else if (c == '-') {
                 continue;
             } else if (c >= 'A' && c <= 'F') {
-                low = (low << 4) | (c - 'A' + 0xa);
+                low = (low << 4) | (c - ('A' - 0xa));
             } else if (c <= ' ') {
                 continue;
             } else {
                 throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, s);
             }
-            if (j++ == 15) {
+            if (++j == 16) {
                 high = low;
                 low = 0;
             }
         }
-        return (ValueUuid) Value.cache(new ValueUuid(high, low));
+        if (j != 32) {
+            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, s);
+        }
+        return get(high, low);
     }
 
     @Override
-    public StringBuilder getSQL(StringBuilder builder) {
-        builder.append('\'');
-        return addString(builder).append('\'');
+    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
+        return addString(builder.append("UUID '")).append('\'');
     }
 
     @Override
@@ -151,6 +169,11 @@ public class ValueUuid extends Value {
         return addString(new StringBuilder(36)).toString();
     }
 
+    @Override
+    public byte[] getBytes() {
+        return Bits.uuidToBytes(high, low);
+    }
+
     private StringBuilder addString(StringBuilder builder) {
         StringUtils.appendHex(builder, high >> 32, 4).append('-');
         StringUtils.appendHex(builder, high >> 16, 2).append('-');
@@ -160,26 +183,13 @@ public class ValueUuid extends Value {
     }
 
     @Override
-    public int compareTypeSafe(Value o, CompareMode mode) {
+    public int compareTypeSafe(Value o, CompareMode mode, CastDataProvider provider) {
         if (o == this) {
             return 0;
         }
         ValueUuid v = (ValueUuid) o;
-        long v1 = high, v2 = v.high;
-        if (v1 == v2) {
-            v1 = low;
-            v2 = v.low;
-            if (mode.isUuidUnsigned()) {
-                v1 += Long.MIN_VALUE;
-                v2 += Long.MIN_VALUE;
-            }
-            return Long.compare(v1, v2);
-        }
-        if (mode.isUuidUnsigned()) {
-            v1 += Long.MIN_VALUE;
-            v2 += Long.MIN_VALUE;
-        }
-        return v1 > v2 ? 1 : -1;
+        int cmp = Long.compareUnsigned(high, v.high);
+        return cmp != 0 ? cmp : Long.compareUnsigned(low, v.low);
     }
 
     @Override
@@ -191,20 +201,13 @@ public class ValueUuid extends Value {
         return high == v.high && low == v.low;
     }
 
-    @Override
-    public Object getObject() {
+    /**
+     * Returns the UUID.
+     *
+     * @return the UUID
+     */
+    public UUID getUuid() {
         return new UUID(high, low);
-    }
-
-    @Override
-    public byte[] getBytes() {
-        return Bits.uuidToBytes(high, low);
-    }
-
-    @Override
-    public void set(PreparedStatement prep, int parameterIndex)
-            throws SQLException {
-        prep.setBytes(parameterIndex, getBytes());
     }
 
     /**
@@ -223,6 +226,16 @@ public class ValueUuid extends Value {
      */
     public long getLow() {
         return low;
+    }
+
+    @Override
+    public long charLength() {
+        return DISPLAY_SIZE;
+    }
+
+    @Override
+    public long octetLength() {
+        return PRECISION;
     }
 
 }

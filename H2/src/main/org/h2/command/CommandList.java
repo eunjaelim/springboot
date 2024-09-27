@@ -1,29 +1,32 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.command;
 
 import java.util.ArrayList;
-
-import org.h2.engine.Session;
+import java.util.HashSet;
+import java.util.Set;
+import org.h2.engine.DbObject;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Parameter;
 import org.h2.expression.ParameterInterface;
 import org.h2.result.ResultInterface;
+import org.h2.result.ResultWithGeneratedKeys;
 
 /**
  * Represents a list of SQL statements.
  */
 class CommandList extends Command {
 
-    private CommandContainer command;
+    private final CommandContainer command;
     private final ArrayList<Prepared> commands;
     private final ArrayList<Parameter> parameters;
     private String remaining;
     private Command remainingCommand;
 
-    CommandList(Session session, String sql, CommandContainer command, ArrayList<Prepared> commands,
+    CommandList(SessionLocal session, String sql, CommandContainer command, ArrayList<Prepared> commands,
             ArrayList<Parameter> parameters, String remaining) {
         super(session, sql);
         this.command = command;
@@ -39,51 +42,43 @@ class CommandList extends Command {
 
     private void executeRemaining() {
         for (Prepared prepared : commands) {
-            prepared.prepare();
+            CommandContainer commandContainer = new CommandContainer(session, prepared.getSQL(), prepared);
             if (prepared.isQuery()) {
-                prepared.query(0);
+                commandContainer.executeQuery(0, false);
             } else {
-                prepared.update();
+                commandContainer.executeUpdate(null);
             }
         }
         if (remaining != null) {
             remainingCommand = session.prepareLocal(remaining);
             remaining = null;
             if (remainingCommand.isQuery()) {
-                remainingCommand.query(0);
+                remainingCommand.executeQuery(0, false);
             } else {
-                remainingCommand.update();
+                remainingCommand.executeUpdate(null);
             }
         }
     }
 
     @Override
-    public int update() {
-        int updateCount = command.executeUpdate(false).getUpdateCount();
+    public ResultWithGeneratedKeys update(Object generatedKeysRequest) {
+        ResultWithGeneratedKeys result = command.executeUpdate(null);
         executeRemaining();
-        return updateCount;
+        return result;
     }
 
     @Override
-    public void prepareJoinBatch() {
-        command.prepareJoinBatch();
-    }
-
-    @Override
-    public ResultInterface query(int maxrows) {
+    public ResultInterface query(long maxrows) {
         ResultInterface result = command.query(maxrows);
         executeRemaining();
         return result;
     }
 
     @Override
-    public void stop() {
-        command.stop();
-        for (Prepared prepared : commands) {
-            CommandContainer.clearCTE(session, prepared);
-        }
+    public void stop(boolean commitIfAutoCommit) {
+        command.stop(commitIfAutoCommit);
         if (remainingCommand != null) {
-            remainingCommand.stop();
+            remainingCommand.stop(commitIfAutoCommit);
         }
     }
 
@@ -110,6 +105,28 @@ class CommandList extends Command {
     @Override
     public int getCommandType() {
         return command.getCommandType();
+    }
+
+    @Override
+    public Set<DbObject> getDependencies() {
+        HashSet<DbObject> dependencies = new HashSet<>();
+        for (Prepared prepared : commands) {
+            prepared.collectDependencies(dependencies);
+        }
+        return dependencies;
+    }
+
+    @Override
+    protected boolean isRetryable() {
+        if (!command.isRetryable()) {
+            return false;
+        }
+        for (Prepared prepared : commands) {
+            if (!prepared.isRetryable()) {
+                return false;
+            }
+        }
+        return remainingCommand == null || remainingCommand.isRetryable();
     }
 
 }

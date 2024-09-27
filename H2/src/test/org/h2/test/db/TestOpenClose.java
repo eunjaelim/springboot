@@ -1,12 +1,16 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.test.db;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -37,7 +41,9 @@ public class TestOpenClose extends TestDb {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase test = TestBase.createCaller().init();
+        test.config.big = true;
+        test.testFromMain();
     }
 
     @Override
@@ -46,8 +52,10 @@ public class TestOpenClose extends TestDb {
         testErrorMessageWrongSplit();
         testCloseDelay();
         testBackup();
+        testBackupWithYoungDeadChunks();
         testCase();
         testReconnectFast();
+        test1_1();
         deleteDb("openClose");
     }
 
@@ -58,8 +66,8 @@ public class TestOpenClose extends TestDb {
         deleteDb("openClose");
         Connection conn;
         conn = getConnection("jdbc:h2:" + getBaseDir() + "/openClose;FILE_LOCK=FS");
-        assertThrows(ErrorCode.DATABASE_ALREADY_OPEN_1, this).getConnection(
-                "jdbc:h2:" + getBaseDir() + "/openClose;FILE_LOCK=FS;OPEN_NEW=TRUE");
+        assertThrows(ErrorCode.DATABASE_ALREADY_OPEN_1,
+                () -> getConnection("jdbc:h2:" + getBaseDir() + "/openClose;FILE_LOCK=FS;OPEN_NEW=TRUE"));
         conn.close();
     }
 
@@ -67,16 +75,10 @@ public class TestOpenClose extends TestDb {
         if (config.memory || config.reopen) {
             return;
         }
-        String fn = getBaseDir() + "/openClose2";
-        if (config.mvStore) {
-            fn += Constants.SUFFIX_MV_FILE;
-        } else {
-            fn += Constants.SUFFIX_PAGE_FILE;
-        }
+        String fn = getBaseDir() + "/openClose2" + Constants.SUFFIX_MV_FILE;
         FileUtils.delete("split:" + fn);
         Connection conn;
-        String url = "jdbc:h2:split:18:" + getBaseDir() + "/openClose2";
-        url = getURL(url, true);
+        String url = getURL("jdbc:h2:split:18:" + getBaseDir() + "/openClose2", true);
         conn = DriverManager.getConnection(url);
         conn.createStatement().execute("create table test(id int, name varchar) " +
                 "as select 1, space(1000000)");
@@ -85,11 +87,7 @@ public class TestOpenClose extends TestDb {
         c.position(c.size() * 2 - 1);
         c.write(ByteBuffer.wrap(new byte[1]));
         c.close();
-        if (config.mvStore) {
-            assertThrows(ErrorCode.IO_EXCEPTION_1, this).getConnection(url);
-        } else {
-            assertThrows(ErrorCode.IO_EXCEPTION_2, this).getConnection(url);
-        }
+        assertThrows(ErrorCode.IO_EXCEPTION_1, () -> getConnection(url));
         FileUtils.delete("split:" + fn);
     }
 
@@ -135,6 +133,53 @@ public class TestOpenClose extends TestDb {
         FileUtils.delete(getBaseDir() + "/test.zip");
     }
 
+    private void testBackupWithYoungDeadChunks() throws SQLException {
+        if (config.memory || !config.big) {
+            return;
+        }
+        deleteDb("openClose");
+        String url = getURL("openClose", true);
+        org.h2.Driver.load();
+        Connection conn = DriverManager.getConnection(url, "sa", "abc def");
+        Statement stat = conn.createStatement();
+
+        // Create a table, inserting a lot of data to end up with young (current time - creation time < retention time)
+        // dead chunks in the database file
+        stat.execute("CREATE TABLE BIG_TABLE(ID BIGINT NOT NULL, GROUP_ID BIGINT, CREATION_DATE TIMESTAMP, " +
+                "HASH_DATA CHARACTER VARYING, VERSION BIGINT NOT NULL)");
+        stat.execute("ALTER TABLE BIG_TABLE ADD CONSTRAINT CONSTRAINT_PK PRIMARY KEY(ID)");
+        for (int i = 0; i < 1_000_000;) {
+            stat.execute(String.format("INSERT INTO BIG_TABLE VALUES (%s, %s, TIMESTAMP '2024-06-14 10:00:00.000'," +
+                    "'y4TMhpkNcw566aUxHtQGL8Hj6rEK8NNyDxZ2hV6HjNbJEHXKwszmyVVi4VI=', 1)", i++, i % 10));
+        }
+        stat.execute("CREATE INDEX IDX_BIG_TABLE_HASH_GROUP ON BIG_TABLE("
+                + "HASH_DATA NULLS FIRST, GROUP_ID NULLS FIRST)");
+        stat.execute("CREATE INDEX IDX_BIG_TABLE_CREATION_DATA ON BIG_TABLE(CREATION_DATE NULLS FIRST)");
+
+        try {
+            stat.execute("BACKUP TO '" + getBaseDir() + "/test.zip'");
+            conn.close();
+            deleteDb("openClose");
+
+            Restore.execute(getBaseDir() + "/test.zip", getBaseDir(), null);
+
+            // Open and close the database twice. Important to do it twice as oach opening will be slightly
+            // different: the first opening will assume the database is not "clean" (as it is an online backup) but
+            // then the closing will mark the DB as "clean" for the second opening
+            for (int i = 0; i < 2; i++) {
+                conn = DriverManager.getConnection(url, "sa", "abc def");
+                stat = conn.createStatement();
+                ResultSet rs = stat.executeQuery("SELECT * FROM BIG_TABLE WHERE ID = 42");
+                rs.next();
+                assertEquals(42, rs.getInt("ID"));
+                assertFalse(rs.next());
+                conn.close();
+            }
+        } finally {
+            FileUtils.delete(getBaseDir() + "/test.zip");
+        }
+    }
+
     private void testReconnectFast() throws SQLException {
         if (config.memory) {
             return;
@@ -155,7 +200,7 @@ public class TestOpenClose extends TestDb {
         conn.close();
         conn = DriverManager.getConnection(url, user, password);
         stat = conn.createStatement();
-        ResultSet rs = stat.executeQuery("SELECT * FROM DUAL");
+        ResultSet rs = stat.executeQuery("SELECT * FROM SYSTEM_RANGE(1, 1)");
         if (rs.next()) {
             rs.getString(1);
         }
@@ -223,11 +268,22 @@ public class TestOpenClose extends TestDb {
         return nextId++;
     }
 
+    private void test1_1() throws IOException {
+        Path old = Paths.get(getBaseDir()).resolve("db" + Constants.SUFFIX_OLD_DATABASE_FILE);
+        Files.createFile(old);
+        try {
+            assertThrows(ErrorCode.FILE_VERSION_ERROR_1,
+                    () -> DriverManager.getConnection("jdbc:h2:" + getBaseDir() + "/db"));
+        } finally {
+            Files.deleteIfExists(old);
+        }
+    }
+
+
     /**
      * A database event listener used in this test.
      */
-    public static final class MyDatabaseEventListener implements
-            DatabaseEventListener {
+    public static final class MyDatabaseEventListener implements DatabaseEventListener {
 
         @Override
         public void exceptionThrown(SQLException e, String sql) {
@@ -235,7 +291,7 @@ public class TestOpenClose extends TestDb {
         }
 
         @Override
-        public void setProgress(int state, String name, int current, int max) {
+        public void setProgress(int state, String name, long current, long max) {
             String stateName;
             switch (state) {
             case STATE_SCAN_FILE:
@@ -261,20 +317,6 @@ public class TestOpenClose extends TestDb {
             // System.out.println(": " + stateName);
         }
 
-        @Override
-        public void closingDatabase() {
-            // nothing to do
-        }
-
-        @Override
-        public void init(String url) {
-            // nothing to do
-        }
-
-        @Override
-        public void opened() {
-            // nothing to do
-        }
     }
 
 }

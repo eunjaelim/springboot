@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.util;
@@ -13,7 +13,6 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.concurrent.TimeUnit;
 
 import org.h2.api.ErrorCode;
 import org.h2.engine.SysProperties;
@@ -41,6 +40,7 @@ public class NetUtils {
      * @param port the port
      * @param ssl if SSL should be used
      * @return the socket
+     * @throws IOException on failure
      */
     public static Socket createLoopbackSocket(int port, boolean ssl)
             throws IOException {
@@ -65,9 +65,25 @@ public class NetUtils {
      *            address)
      * @param ssl if SSL should be used
      * @return the socket
+     * @throws IOException on failure
+     */
+    public static Socket createSocket(String server, int defaultPort, boolean ssl) throws IOException {
+        return createSocket(server, defaultPort, ssl, 0);
+    }
+
+    /**
+     * Create a client socket that is connected to the given address and port.
+     *
+     * @param server to connect to (including an optional port)
+     * @param defaultPort the default port (if not specified in the server
+     *            address)
+     * @param ssl if SSL should be used
+     * @param networkTimeout socket so timeout
+     * @return the socket
+     * @throws IOException on failure
      */
     public static Socket createSocket(String server, int defaultPort,
-            boolean ssl) throws IOException {
+            boolean ssl, int networkTimeout) throws IOException {
         int port = defaultPort;
         // IPv6: RFC 2732 format is '[a:b:c:d:e:f:g:h]' or
         // '[a:b:c:d:e:f:g:h]:port'
@@ -80,7 +96,7 @@ public class NetUtils {
             server = server.substring(0, idx);
         }
         InetAddress address = InetAddress.getByName(server);
-        return createSocket(address, port, ssl);
+        return createSocket(address, port, ssl, networkTimeout);
     }
 
     /**
@@ -90,8 +106,23 @@ public class NetUtils {
      * @param port the port
      * @param ssl if SSL should be used
      * @return the socket
+     * @throws IOException on failure
      */
     public static Socket createSocket(InetAddress address, int port, boolean ssl)
+        throws IOException {
+        return createSocket(address, port, ssl, 0);
+    }
+    /**
+     * Create a client socket that is connected to the given address and port.
+     *
+     * @param address the address to connect to
+     * @param port the port
+     * @param ssl if SSL should be used
+     * @param networkTimeout socket so timeout
+     * @return the socket
+     * @throws IOException on failure
+     */
+    public static Socket createSocket(InetAddress address, int port, boolean ssl, int networkTimeout)
             throws IOException {
         long start = System.nanoTime();
         for (int i = 0;; i++) {
@@ -100,12 +131,12 @@ public class NetUtils {
                     return CipherFactory.createSocket(address, port);
                 }
                 Socket socket = new Socket();
+                socket.setSoTimeout(networkTimeout);
                 socket.connect(new InetSocketAddress(address, port),
                         SysProperties.SOCKET_CONNECT_TIMEOUT);
                 return socket;
             } catch (IOException e) {
-                if (System.nanoTime() - start >=
-                        TimeUnit.MILLISECONDS.toNanos(SysProperties.SOCKET_CONNECT_TIMEOUT)) {
+                if (System.nanoTime() - start >= SysProperties.SOCKET_CONNECT_TIMEOUT * 1_000_000L) {
                     // either it was a connect timeout,
                     // or list of different exceptions
                     throw e;
@@ -127,12 +158,7 @@ public class NetUtils {
 
     /**
      * Create a server socket. The system property h2.bindAddress is used if
-     * set. If SSL is used and h2.enableAnonymousTLS is true, an attempt is
-     * made to modify the security property jdk.tls.legacyAlgorithms
-     * (in newer JVMs) to allow anonymous TLS.
-     * <p>
-     * This system change is effectively permanent for the lifetime of the JVM.
-     * @see CipherFactory#removeAnonFromLegacyAlgorithms()
+     * set.
      *
      * @param port the port to listen on
      * @param ssl if SSL should be used
@@ -189,6 +215,7 @@ public class NetUtils {
      *
      * @param socket the socket
      * @return true if it is
+     * @throws UnknownHostException on failure
      */
     public static boolean isLocalAddress(Socket socket)
             throws UnknownHostException {
@@ -232,10 +259,8 @@ public class NetUtils {
      */
     public static synchronized String getLocalAddress() {
         long now = System.nanoTime();
-        if (cachedLocalAddress != null) {
-            if (cachedLocalAddressTime + TimeUnit.MILLISECONDS.toNanos(CACHE_MILLIS) > now) {
-                return cachedLocalAddress;
-            }
+        if (cachedLocalAddress != null && now - cachedLocalAddressTime < CACHE_MILLIS * 1_000_000L) {
+            return cachedLocalAddress;
         }
         InetAddress bind = null;
         boolean useLocalhost = false;
@@ -290,6 +315,80 @@ public class NetUtils {
         } catch (Exception e) {
             return "unknown";
         }
+    }
+
+    /**
+     * Appends short representation of the specified IP address to the string
+     * builder.
+     *
+     * @param builder
+     *            string builder to append to, or {@code null}
+     * @param address
+     *            IP address
+     * @param addBrackets
+     *            if ({@code true}, add brackets around IPv6 addresses
+     * @return the specified or the new string builder with short representation
+     *         of specified address
+     */
+    public static StringBuilder ipToShortForm(StringBuilder builder, byte[] address, boolean addBrackets) {
+        switch (address.length) {
+        case 4:
+            if (builder == null) {
+                builder = new StringBuilder(15);
+            }
+            builder //
+                    .append(address[0] & 0xff).append('.') //
+                    .append(address[1] & 0xff).append('.') //
+                    .append(address[2] & 0xff).append('.') //
+                    .append(address[3] & 0xff);
+            break;
+        case 16:
+            short[] a = new short[8];
+            int maxStart = 0, maxLen = 0, currentLen = 0;
+            for (int i = 0, offset = 0; i < 8; i++) {
+                if ((a[i] = (short) ((address[offset++] & 0xff) << 8 | address[offset++] & 0xff)) == 0) {
+                    currentLen++;
+                    if (currentLen > maxLen) {
+                        maxLen = currentLen;
+                        maxStart = i - currentLen + 1;
+                    }
+                } else {
+                    currentLen = 0;
+                }
+            }
+            if (builder == null) {
+                builder = new StringBuilder(addBrackets ? 41 : 39);
+            }
+            if (addBrackets) {
+                builder.append('[');
+            }
+            int start;
+            if (maxLen > 1) {
+                for (int i = 0; i < maxStart; i++) {
+                    builder.append(Integer.toHexString(a[i] & 0xffff)).append(':');
+                }
+                if (maxStart == 0) {
+                    builder.append(':');
+                }
+                builder.append(':');
+                start = maxStart + maxLen;
+            } else {
+                start = 0;
+            }
+            for (int i = start; i < 8; i++) {
+                builder.append(Integer.toHexString(a[i] & 0xffff));
+                if (i < 7) {
+                    builder.append(':');
+                }
+            }
+            if (addBrackets) {
+                builder.append(']');
+            }
+            break;
+        default:
+            StringUtils.convertBytesToHex(builder, address);
+        }
+        return builder;
     }
 
 }

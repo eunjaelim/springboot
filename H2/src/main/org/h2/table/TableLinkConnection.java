@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.table;
@@ -37,6 +37,7 @@ public class TableLinkConnection {
      * How many times the connection is used.
      */
     private int useCounter;
+    private boolean autocommit =true;
 
     private TableLinkConnection(
             HashMap<TableLinkConnection, TableLinkConnection> map,
@@ -140,6 +141,23 @@ public class TableLinkConnection {
         if (actuallyClose) {
             JdbcUtils.closeSilently(conn);
         }
+    }
+
+    /**
+     * Specify if the autocommit mode is activated or not
+     *
+     * @param mode to set
+     */
+    public void setAutoCommit(boolean mode) {
+        this.autocommit= mode;
+    }
+
+    /**
+     * The autocommit mode
+     * @return true if autocommit is on
+     */
+    public boolean getAutocommit(){
+        return autocommit;
     }
 
 }

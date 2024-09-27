@@ -1,15 +1,14 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.value;
 
 import org.h2.api.ErrorCode;
+import org.h2.engine.CastDataProvider;
 import org.h2.engine.Constants;
-import org.h2.engine.Mode;
 import org.h2.message.DbException;
-import org.h2.util.MathUtils;
 
 /**
  * Base class for ARRAY and ROW values.
@@ -20,8 +19,6 @@ public abstract class ValueCollectionBase extends Value {
      * Values.
      */
     final Value[] values;
-
-    private TypeInfo type;
 
     private int hash;
 
@@ -47,37 +44,21 @@ public abstract class ValueCollectionBase extends Value {
     }
 
     @Override
-    public TypeInfo getType() {
-        TypeInfo type = this.type;
-        if (type == null) {
-            long precision = 0, displaySize = 0;
-            for (Value v : values) {
-                TypeInfo t = v.getType();
-                precision += t.getPrecision();
-                displaySize += t.getDisplaySize();
-            }
-            this.type = type = new TypeInfo(getValueType(), precision, 0, MathUtils.convertLongToInt(displaySize),
-                    null);
-        }
-        return type;
-    }
-
-    @Override
-    public int compareWithNull(Value v, boolean forEquality, Mode databaseMode, CompareMode compareMode) {
+    public int compareWithNull(Value v, boolean forEquality, CastDataProvider provider, CompareMode compareMode) {
         if (v == ValueNull.INSTANCE) {
             return Integer.MIN_VALUE;
         }
         ValueCollectionBase l = this;
         int leftType = l.getValueType();
         int rightType = v.getValueType();
-        if (rightType != ARRAY && rightType != ROW) {
+        if (rightType != leftType) {
             throw v.getDataConversionError(leftType);
         }
         ValueCollectionBase r = (ValueCollectionBase) v;
         Value[] leftArray = l.values, rightArray = r.values;
         int leftLength = leftArray.length, rightLength = rightArray.length;
         if (leftLength != rightLength) {
-            if (leftType == ROW || rightType == ROW) {
+            if (leftType == ROW) {
                 throw DbException.get(ErrorCode.COLUMN_COUNT_DOES_NOT_MATCH);
             }
             if (forEquality) {
@@ -89,7 +70,7 @@ public abstract class ValueCollectionBase extends Value {
             for (int i = 0; i < leftLength; i++) {
                 Value v1 = leftArray[i];
                 Value v2 = rightArray[i];
-                int comp = v1.compareWithNull(v2, forEquality, databaseMode, compareMode);
+                int comp = v1.compareWithNull(v2, forEquality, provider, compareMode);
                 if (comp != 0) {
                     if (comp != Integer.MIN_VALUE) {
                         return comp;
@@ -103,7 +84,7 @@ public abstract class ValueCollectionBase extends Value {
         for (int i = 0; i < len; i++) {
             Value v1 = leftArray[i];
             Value v2 = rightArray[i];
-            int comp = v1.compareWithNull(v2, forEquality, databaseMode, compareMode);
+            int comp = v1.compareWithNull(v2, forEquality, provider, compareMode);
             if (comp != 0) {
                 return comp;
             }
@@ -122,10 +103,29 @@ public abstract class ValueCollectionBase extends Value {
     }
 
     @Override
+    Value getValueWithFirstNullImpl(Value v) {
+        ValueCollectionBase r = (ValueCollectionBase) v;
+        Value[] leftArray = values, rightArray = r.values;
+        int leftLength = leftArray.length, rightLength = rightArray.length;
+        int len = Math.min(leftLength, rightLength);
+        for (int i = 0; i < len; i++) {
+            Value v1 = leftArray[i];
+            Value v2 = rightArray[i];
+            Value c = v1.getValueWithFirstNull(v2);
+            if (c == v1) {
+                return this;
+            } else if (c == v2) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    @Override
     public int getMemory() {
-        int memory = 72;
+        int memory = 72 + values.length * Constants.MEMORY_POINTER;
         for (Value v : values) {
-            memory += v.getMemory() + Constants.MEMORY_POINTER;
+            memory += v.getMemory();
         }
         return memory;
     }

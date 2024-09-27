@@ -1,25 +1,21 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.test.unit;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.io.StringReader;
 import java.math.BigInteger;
-import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.Random;
+
 import org.h2.test.TestBase;
-import org.h2.util.Bits;
 import org.h2.util.IOUtils;
 import org.h2.util.Utils;
 
@@ -39,7 +35,7 @@ public class TestUtils extends TestBase {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -47,8 +43,6 @@ public class TestUtils extends TestBase {
         testIOUtils();
         testSortTopN();
         testSortTopNRandom();
-        testWriteReadInt();
-        testWriteReadLong();
         testGetNonPrimitiveClass();
         testGetNonPrimitiveClass();
         testGetNonPrimitiveClass();
@@ -95,74 +89,13 @@ public class TestUtils extends TestBase {
         }
     }
 
-    private void testWriteReadInt() {
-        byte[] buff = new byte[4];
-        for (int x : new int[]{Integer.MIN_VALUE, Integer.MAX_VALUE, 0, 1, -1,
-                Short.MIN_VALUE, Short.MAX_VALUE}) {
-            testIntImpl1(buff, x);
-        }
-        Random r = new Random(1);
-        for (int i = 0; i < 1000; i++) {
-            testIntImpl1(buff, r.nextInt());
-        }
-    }
-
-    private void testIntImpl1(byte[] buff, int x) {
-        int r = Integer.reverseBytes(x);
-        Bits.writeInt(buff, 0, x);
-        testIntImpl2(buff, x, r);
-        Bits.writeIntLE(buff, 0, x);
-        testIntImpl2(buff, r, x);
-    }
-
-    private void testIntImpl2(byte[] buff, int x, int r) {
-        assertEquals(x, Bits.readInt(buff, 0));
-        assertEquals(r, Bits.readIntLE(buff, 0));
-    }
-
-    private void testWriteReadLong() {
-        byte[] buff = new byte[8];
-        for (long x : new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 0, 1, -1,
-                Integer.MIN_VALUE, Integer.MAX_VALUE}) {
-            testLongImpl1(buff, x);
-        }
-        Random r = new Random(1);
-        for (int i = 0; i < 1000; i++) {
-            testLongImpl1(buff, r.nextLong());
-        }
-    }
-
-    private void testLongImpl1(byte[] buff, long x) {
-        long r = Long.reverseBytes(x);
-        Bits.writeLong(buff, 0, x);
-        testLongImpl2(buff, x, r);
-        Bits.writeLongLE(buff, 0, x);
-        testLongImpl2(buff, r, x);
-        Bits.writeDouble(buff, 0, Double.longBitsToDouble(x));
-        testLongImpl2(buff, x, r);
-        Bits.writeDoubleLE(buff, 0, Double.longBitsToDouble(x));
-        testLongImpl2(buff, r, x);
-    }
-
-    private void testLongImpl2(byte[] buff, long x, long r) {
-        assertEquals(x, Bits.readLong(buff, 0));
-        assertEquals(r, Bits.readLongLE(buff, 0));
-        assertEquals(Double.longBitsToDouble(x), Bits.readDouble(buff, 0));
-        assertEquals(Double.longBitsToDouble(r), Bits.readDoubleLE(buff, 0));
-    }
-
     private void testSortTopN() {
-        Comparator<Integer> comp = new Comparator<Integer>() {
-            @Override
-            public int compare(Integer o1, Integer o2) {
-                return o1.compareTo(o2);
-            }
-        };
+        Comparator<Integer> comp = Comparator.naturalOrder();
         Integer[] arr = new Integer[] {};
-        Utils.sortTopN(arr, 0, 5, comp);
+        Utils.sortTopN(arr, 0, 0, comp);
 
         arr = new Integer[] { 1 };
-        Utils.sortTopN(arr, 0, 5, comp);
+        Utils.sortTopN(arr, 0, 1, comp);
 
         arr = new Integer[] { 3, 5, 1, 4, 2 };
         Utils.sortTopN(arr, 0, 2, comp);
@@ -172,23 +105,19 @@ public class TestUtils extends TestBase {
 
     private void testSortTopNRandom() {
         Random rnd = new Random();
-        Comparator<Integer> comp = new Comparator<Integer>() {
-            @Override
-            public int compare(Integer o1, Integer o2) {
-                return o1.compareTo(o2);
-            }
-        };
+        Comparator<Integer> comp = Comparator.naturalOrder();
         for (int z = 0; z < 10000; z++) {
-            Integer[] arr = new Integer[1 + rnd.nextInt(500)];
-            for (int i = 0; i < arr.length; i++) {
+            int length = 1 + rnd.nextInt(500);
+            Integer[] arr = new Integer[length];
+            for (int i = 0; i < length; i++) {
                 arr[i] = rnd.nextInt(50);
             }
-            Integer[] arr2 = Arrays.copyOf(arr, arr.length);
-            int offset = rnd.nextInt(arr.length);
-            int limit = rnd.nextInt(arr.length);
-            Utils.sortTopN(arr, offset, limit, comp);
+            Integer[] arr2 = Arrays.copyOf(arr, length);
+            int offset = rnd.nextInt(length);
+            int limit = rnd.nextInt(length - offset + 1);
+            Utils.sortTopN(arr, offset, offset + limit, comp);
             Arrays.sort(arr2, comp);
-            for (int i = offset, end = Math.min(offset + limit, arr.length); i < end; i++) {
+            for (int i = offset, end = offset + limit; i < end; i++) {
                 if (!arr[i].equals(arr2[i])) {
                     fail(offset + " " + end + "\n" + Arrays.toString(arr) +
                             "\n" + Arrays.toString(arr2));
@@ -231,35 +160,10 @@ public class TestUtils extends TestBase {
         // Instance methods
         long x = (Long) Utils.callMethod(instance, "longValue");
         assertEquals(10, x);
-        // Static fields
-        String pathSeparator = (String) Utils
-                .getStaticField("java.io.File.pathSeparator");
-        assertEquals(File.pathSeparator, pathSeparator);
         // Instance fields
-        String test = (String) Utils.getField(this, "testField");
-        assertEquals(this.testField, test);
-        // Class present?
-        assertFalse(Utils.isClassPresent("abc"));
-        assertTrue(Utils.isClassPresent(getClass().getName()));
         Utils.callStaticMethod("java.lang.String.valueOf", "a");
         Utils.callStaticMethod("java.awt.AWTKeyStroke.getAWTKeyStroke",
                 'x', java.awt.event.InputEvent.SHIFT_DOWN_MASK);
-        // Common comparable superclass
-        assertFalse(Utils.haveCommonComparableSuperclass(
-                Integer.class,
-                Long.class));
-        assertTrue(Utils.haveCommonComparableSuperclass(
-                Integer.class,
-                Integer.class));
-        assertTrue(Utils.haveCommonComparableSuperclass(
-                Timestamp.class,
-                Date.class));
-        assertFalse(Utils.haveCommonComparableSuperclass(
-                ArrayList.class,
-                Long.class));
-        assertFalse(Utils.haveCommonComparableSuperclass(
-                Integer.class,
-                ArrayList.class));
     }
 
     private void testParseBooleanCheckFalse(String value) {
@@ -308,18 +212,8 @@ public class TestUtils extends TestBase {
         // Test other values
         assertFalse(Utils.parseBoolean("BAD", false, false));
         assertTrue(Utils.parseBoolean("BAD", true, false));
-        try {
-            Utils.parseBoolean("BAD", false, true);
-            fail();
-        } catch (IllegalArgumentException e) {
-            // OK
-        }
-        try {
-            Utils.parseBoolean("BAD", true, true);
-            fail();
-        } catch (IllegalArgumentException e) {
-            // OK
-        }
+        assertThrows(IllegalArgumentException.class, () -> Utils.parseBoolean("BAD", false, true));
+        assertThrows(IllegalArgumentException.class, () -> Utils.parseBoolean("BAD", true, true));
     }
 
 }

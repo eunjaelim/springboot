@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.test.synth;
@@ -36,7 +36,7 @@ public class TestOuterJoins extends TestDb {
     public static void main(String... a) throws Exception {
         TestBase test = TestBase.createCaller().init();
         test.config.traceTest = true;
-        test.test();
+        test.testFromMain();
     }
 
     @Override
@@ -61,12 +61,12 @@ public class TestOuterJoins extends TestDb {
         }
         deleteDerby();
         try {
-            Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
+            Class.forName("org.apache.derby.iapi.jdbc.AutoloadedDriver");
             Connection c2 = DriverManager.getConnection(
                     "jdbc:derby:" + getBaseDir() +
                     "/derby/test;create=true", "sa", "sa");
             dbs.add(c2.createStatement());
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // database not installed - ok
         }
         String shortest = null;
@@ -420,7 +420,8 @@ public class TestOuterJoins extends TestDb {
                 "on a.x = c.x");
         assertTrue(rs.next());
         sql = cleanRemarks(rs.getString(1));
-        assertEquals("SELECT \"A\".\"X\", \"B\".\"X\", \"C\".\"X\", \"C\".\"Y\" FROM \"PUBLIC\".\"A\" " +
+        assertEquals("SELECT \"PUBLIC\".\"A\".\"X\", \"PUBLIC\".\"B\".\"X\", " +
+                "\"PUBLIC\".\"C\".\"X\", \"PUBLIC\".\"C\".\"Y\" FROM \"PUBLIC\".\"A\" " +
                 "LEFT OUTER JOIN ( \"PUBLIC\".\"B\" " +
                 "LEFT OUTER JOIN \"PUBLIC\".\"C\" " +
                 "ON \"B\".\"X\" = \"C\".\"Y\" ) " +
@@ -501,7 +502,8 @@ public class TestOuterJoins extends TestDb {
                 "inner join c on c.x = 1) on a.x = b.x");
         assertTrue(rs.next());
         sql = cleanRemarks(rs.getString(1));
-        assertEquals("SELECT \"A\".\"X\", \"B\".\"X\", \"C\".\"X\" FROM \"PUBLIC\".\"A\" " +
+        assertEquals("SELECT \"PUBLIC\".\"A\".\"X\", \"PUBLIC\".\"B\".\"X\", \"PUBLIC\".\"C\".\"X\" " +
+                "FROM \"PUBLIC\".\"A\" " +
                 "LEFT OUTER JOIN ( \"PUBLIC\".\"B\" " +
                 "INNER JOIN \"PUBLIC\".\"C\" ON \"C\".\"X\" = 1 ) ON \"A\".\"X\" = \"B\".\"X\"", sql);
         stat.execute("drop table a, b, c");
@@ -553,7 +555,7 @@ public class TestOuterJoins extends TestDb {
                 "LEFT OUTER JOIN ( \"PUBLIC\".\"B\" " +
                 "INNER JOIN \"PUBLIC\".\"BASE\" \"B_BASE\" " +
                 "ON (\"B_BASE\".\"DELETED\" = 0) AND (\"B\".\"PK\" = \"B_BASE\".\"PK\") ) " +
-                "ON TRUE INNER JOIN \"PUBLIC\".\"A\" ON 1=1 WHERE \"A\".\"PK\" = \"A_BASE\".\"PK\"", sql);
+                "ON 1=1 INNER JOIN \"PUBLIC\".\"A\" ON 1=1 WHERE \"A\".\"PK\" = \"A_BASE\".\"PK\"", sql);
         rs = stat.executeQuery("select a.pk, a_base.pk, b.pk, b_base.pk from a " +
                 "inner join base a_base on a.pk = a_base.pk " +
                 "left outer join (b inner join base b_base " +

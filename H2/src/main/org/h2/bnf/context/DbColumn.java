@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.bnf.context;
@@ -64,6 +64,7 @@ public class DbColumn {
      * @param contents the database contents
      * @param rs the result set
      * @return the column
+     * @throws SQLException on failure
      */
     public static DbColumn getProcedureColumn(DbContents contents, ResultSet rs)
             throws SQLException {
@@ -76,6 +77,7 @@ public class DbColumn {
      * @param contents the database contents
      * @param rs the result set
      * @return the column
+     * @throws SQLException on failure
      */
     public static DbColumn getColumn(DbContents contents, ResultSet rs)
             throws SQLException {

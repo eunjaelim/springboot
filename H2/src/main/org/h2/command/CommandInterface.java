@@ -1,19 +1,21 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.command;
 
 import java.util.ArrayList;
 import org.h2.expression.ParameterInterface;
+import org.h2.result.BatchResult;
 import org.h2.result.ResultInterface;
 import org.h2.result.ResultWithGeneratedKeys;
+import org.h2.value.Value;
 
 /**
  * Represents a SQL statement.
  */
-public interface CommandInterface {
+public interface CommandInterface extends AutoCloseable {
 
     /**
      * The type for unknown statement.
@@ -28,47 +30,47 @@ public interface CommandInterface {
     int ALTER_INDEX_RENAME = 1;
 
     /**
-     * The type of a ALTER SCHEMA RENAME statement.
+     * The type of an ALTER SCHEMA RENAME statement.
      */
     int ALTER_SCHEMA_RENAME = 2;
 
     /**
-     * The type of a ALTER TABLE ADD CHECK statement.
+     * The type of an ALTER TABLE ADD CHECK statement.
      */
     int ALTER_TABLE_ADD_CONSTRAINT_CHECK = 3;
 
     /**
-     * The type of a ALTER TABLE ADD UNIQUE statement.
+     * The type of an ALTER TABLE ADD UNIQUE statement.
      */
     int ALTER_TABLE_ADD_CONSTRAINT_UNIQUE = 4;
 
     /**
-     * The type of a ALTER TABLE ADD FOREIGN KEY statement.
+     * The type of an ALTER TABLE ADD FOREIGN KEY statement.
      */
     int ALTER_TABLE_ADD_CONSTRAINT_REFERENTIAL = 5;
 
     /**
-     * The type of a ALTER TABLE ADD PRIMARY KEY statement.
+     * The type of an ALTER TABLE ADD PRIMARY KEY statement.
      */
     int ALTER_TABLE_ADD_CONSTRAINT_PRIMARY_KEY = 6;
 
     /**
-     * The type of a ALTER TABLE ADD statement.
+     * The type of an ALTER TABLE ADD statement.
      */
     int ALTER_TABLE_ADD_COLUMN = 7;
 
     /**
-     * The type of a ALTER TABLE ALTER COLUMN SET NOT NULL statement.
+     * The type of an ALTER TABLE ALTER COLUMN SET NOT NULL statement.
      */
     int ALTER_TABLE_ALTER_COLUMN_NOT_NULL = 8;
 
     /**
-     * The type of a ALTER TABLE ALTER COLUMN DROP NOT NULL statement.
+     * The type of an ALTER TABLE ALTER COLUMN DROP NOT NULL statement.
      */
     int ALTER_TABLE_ALTER_COLUMN_DROP_NOT_NULL = 9;
 
     /**
-     * The type of a ALTER TABLE ALTER COLUMN SET DEFAULT and ALTER TABLE ALTER
+     * The type of an ALTER TABLE ALTER COLUMN SET DEFAULT and ALTER TABLE ALTER
      * COLUMN DROP DEFAULT statements.
      */
     int ALTER_TABLE_ALTER_COLUMN_DEFAULT = 10;
@@ -80,52 +82,52 @@ public interface CommandInterface {
     int ALTER_TABLE_ALTER_COLUMN_CHANGE_TYPE = 11;
 
     /**
-     * The type of a ALTER TABLE DROP COLUMN statement.
+     * The type of an ALTER TABLE DROP COLUMN statement.
      */
     int ALTER_TABLE_DROP_COLUMN = 12;
 
     /**
-     * The type of a ALTER TABLE ALTER COLUMN SELECTIVITY statement.
+     * The type of an ALTER TABLE ALTER COLUMN SELECTIVITY statement.
      */
     int ALTER_TABLE_ALTER_COLUMN_SELECTIVITY = 13;
 
     /**
-     * The type of a ALTER TABLE DROP CONSTRAINT statement.
+     * The type of an ALTER TABLE DROP CONSTRAINT statement.
      */
     int ALTER_TABLE_DROP_CONSTRAINT = 14;
 
     /**
-     * The type of a ALTER TABLE RENAME statement.
+     * The type of an ALTER TABLE RENAME statement.
      */
     int ALTER_TABLE_RENAME = 15;
 
     /**
-     * The type of a ALTER TABLE ALTER COLUMN RENAME statement.
+     * The type of an ALTER TABLE ALTER COLUMN RENAME statement.
      */
     int ALTER_TABLE_ALTER_COLUMN_RENAME = 16;
 
     /**
-     * The type of a ALTER USER ADMIN statement.
+     * The type of an ALTER USER ADMIN statement.
      */
     int ALTER_USER_ADMIN = 17;
 
     /**
-     * The type of a ALTER USER RENAME statement.
+     * The type of an ALTER USER RENAME statement.
      */
     int ALTER_USER_RENAME = 18;
 
     /**
-     * The type of a ALTER USER SET PASSWORD statement.
+     * The type of an ALTER USER SET PASSWORD statement.
      */
     int ALTER_USER_SET_PASSWORD = 19;
 
     /**
-     * The type of a ALTER VIEW statement.
+     * The type of an ALTER VIEW statement.
      */
     int ALTER_VIEW = 20;
 
     /**
-     * The type of a ANALYZE statement.
+     * The type of an ANALYZE statement.
      */
     int ANALYZE = 21;
 
@@ -292,12 +294,12 @@ public interface CommandInterface {
     // dml operations
 
     /**
-     * The type of a ALTER SEQUENCE statement.
+     * The type of an ALTER SEQUENCE statement.
      */
     int ALTER_SEQUENCE = 54;
 
     /**
-     * The type of a ALTER TABLE SET REFERENTIAL_INTEGRITY statement.
+     * The type of an ALTER TABLE SET REFERENTIAL_INTEGRITY statement.
      */
     int ALTER_TABLE_SET_REFERENTIAL_INTEGRITY = 55;
 
@@ -317,17 +319,17 @@ public interface CommandInterface {
     int DELETE = 58;
 
     /**
-     * The type of a EXECUTE statement.
+     * The type of an EXECUTE statement.
      */
     int EXECUTE = 59;
 
     /**
-     * The type of a EXPLAIN statement.
+     * The type of an EXPLAIN statement.
      */
     int EXPLAIN = 60;
 
     /**
-     * The type of a INSERT statement.
+     * The type of an INSERT statement.
      */
     int INSERT = 61;
 
@@ -367,7 +369,7 @@ public interface CommandInterface {
     int SET = 67;
 
     /**
-     * The type of a UPDATE statement.
+     * The type of an UPDATE statement.
      */
     int UPDATE = 68;
 
@@ -454,18 +456,17 @@ public interface CommandInterface {
     int SHUTDOWN_DEFRAG = 84;
 
     /**
-     * The type of a ALTER TABLE RENAME CONSTRAINT statement.
+     * The type of an ALTER TABLE RENAME CONSTRAINT statement.
      */
     int ALTER_TABLE_RENAME_CONSTRAINT = 85;
 
-
     /**
-     * The type of a EXPLAIN ANALYZE statement.
+     * The type of an EXPLAIN ANALYZE statement.
      */
     int EXPLAIN_ANALYZE = 86;
 
     /**
-     * The type of a ALTER TABLE ALTER COLUMN SET INVISIBLE statement.
+     * The type of an ALTER TABLE ALTER COLUMN SET INVISIBLE statement.
      */
     int ALTER_TABLE_ALTER_COLUMN_VISIBILITY = 87;
 
@@ -480,9 +481,82 @@ public interface CommandInterface {
     int DROP_SYNONYM = 89;
 
     /**
-     * The type of a ALTER TABLE ALTER COLUMN SET ON UPDATE statement.
+     * The type of an ALTER TABLE ALTER COLUMN SET ON UPDATE statement.
      */
     int ALTER_TABLE_ALTER_COLUMN_ON_UPDATE = 90;
+
+    /**
+     * The type of an EXECUTE IMMEDIATELY statement.
+     */
+    int EXECUTE_IMMEDIATELY = 91;
+
+    /**
+     * The type of ALTER DOMAIN ADD CONSTRAINT statement.
+     */
+    int ALTER_DOMAIN_ADD_CONSTRAINT = 92;
+
+    /**
+     * The type of ALTER DOMAIN DROP CONSTRAINT statement.
+     */
+    int ALTER_DOMAIN_DROP_CONSTRAINT = 93;
+
+    /**
+     * The type of an ALTER DOMAIN SET DEFAULT and ALTER DOMAIN DROP DEFAULT
+     * statements.
+     */
+    int ALTER_DOMAIN_DEFAULT = 94;
+
+    /**
+     * The type of an ALTER DOMAIN SET ON UPDATE and ALTER DOMAIN DROP ON UPDATE
+     * statements.
+     */
+    int ALTER_DOMAIN_ON_UPDATE = 95;
+
+    /**
+     * The type of an ALTER DOMAIN RENAME statement.
+     */
+    int ALTER_DOMAIN_RENAME = 96;
+
+    /**
+     * The type of a HELP statement.
+     */
+    int HELP = 97;
+
+    /**
+     * The type of an ALTER TABLE ALTER COLUMN DROP EXPRESSION statement.
+     */
+    int ALTER_TABLE_ALTER_COLUMN_DROP_EXPRESSION = 98;
+
+    /**
+     * The type of an ALTER TABLE ALTER COLUMN DROP IDENTITY statement.
+     */
+    int ALTER_TABLE_ALTER_COLUMN_DROP_IDENTITY = 99;
+
+    /**
+     * The type of ALTER TABLE ALTER COLUMN SET DEFAULT ON NULL and ALTER TABLE
+     * ALTER COLUMN DROP DEFAULT ON NULL statements.
+     */
+    int ALTER_TABLE_ALTER_COLUMN_DEFAULT_ON_NULL = 100;
+
+    /**
+     * The type of an ALTER DOMAIN RENAME CONSTRAINT statement.
+     */
+    int ALTER_DOMAIN_RENAME_CONSTRAINT = 101;
+
+    /**
+     * The type of a CREATE MATERIALIZED VIEW statement.
+     */
+    int CREATE_MATERIALIZED_VIEW = 102;
+
+    /**
+     * The type of a REFRESH MATERIALIZED VIEW statement.
+     */
+    int REFRESH_MATERIALIZED_VIEW = 103;
+
+    /**
+     * The type of a DROP MATERIALIZED VIEW statement.
+     */
+    int DROP_MATERIALIZED_VIEW = 104;
 
     /**
      * Get command type.
@@ -512,30 +586,50 @@ public interface CommandInterface {
      * @param scrollable if the result set must be scrollable
      * @return the result
      */
-    ResultInterface executeQuery(int maxRows, boolean scrollable);
+    ResultInterface executeQuery(long maxRows, boolean scrollable);
 
     /**
      * Execute the statement
      *
      * @param generatedKeysRequest
-     *            {@code false} if generated keys are not needed, {@code true} if
-     *            generated keys should be configured automatically, {@code int[]}
-     *            to specify column indices to return generated keys from, or
-     *            {@code String[]} to specify column names to return generated keys
-     *            from
+     *            {@code null} or {@code false} if generated keys are not
+     *            needed, {@code true} if generated keys should be configured
+     *            automatically, {@code int[]} to specify column indices to
+     *            return generated keys from, or {@code String[]} to specify
+     *            column names to return generated keys from
      *
-     * @return the update count
+     * @return the update count and generated keys, if any
      */
     ResultWithGeneratedKeys executeUpdate(Object generatedKeysRequest);
 
+
     /**
-     * Stop the command execution, release all locks and resources
+     * Executes the statement with multiple sets of parameters.
+     *
+     * @param batchParameters
+     *            batch parameters
+     * @param generatedKeysRequest
+     *            {@code null} or {@code false} if generated keys are not needed,
+     *            {@code true} if generated keys should be configured
+     *            automatically, {@code int[]} to specify column indices to
+     *            return generated keys from, or {@code String[]} to specify
+     *            column names to return generated keys from
+     * @return result of batch execution
      */
-    void stop();
+    BatchResult executeBatchUpdate(ArrayList<Value[]> batchParameters, Object generatedKeysRequest);
+
+    /**
+     * Stop the command execution, release all locks and resources.
+     *
+     * @param commitIfAutoCommit
+     *            commit the session if auto-commit is enabled
+     */
+    void stop(boolean commitIfAutoCommit);
 
     /**
      * Close the statement.
      */
+    @Override
     void close();
 
     /**
@@ -549,4 +643,5 @@ public interface CommandInterface {
      * @return the empty result
      */
     ResultInterface getMetaData();
+
 }

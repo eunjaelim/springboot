@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.engine;
@@ -56,7 +56,7 @@ class DelayedDatabaseCloser extends Thread {
         WeakReference<Database> ref = databaseRef;
         if (ref != null && (database = ref.get()) != null) {
             try {
-                database.close(false);
+                database.close();
             } catch (RuntimeException e) {
                 // this can happen when stopping a web application,
                 // if loading classes is no longer allowed

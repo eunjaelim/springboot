@@ -1,6 +1,6 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (http://h2database.com/html/license.html).
+ * Copyright 2004-2024 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
 package org.h2.test.synth;
@@ -32,9 +32,7 @@ public class TestMultiThreaded extends TestDb {
         TestBase test = createCaller().init(config);
         for (int i = 0; i < 100; i++) {
             System.out.println("Pass #" + i);
-            test.config.beforeTest();
-            test.test();
-            test.config.afterTest();
+            test.testFromMain();
         }
     }
 
@@ -138,7 +136,7 @@ public class TestMultiThreaded extends TestDb {
         int size = getSize(2, 20);
         Connection[] connList = new Connection[size];
         for (int i = 0; i < size; i++) {
-            connList[i] = getConnection("multiThreaded;MULTI_THREADED=1");
+            connList[i] = getConnection("multiThreaded");
         }
         Connection conn = connList[0];
         Statement stat = conn.createStatement();
