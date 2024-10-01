@@ -3,7 +3,7 @@ package hello.core.scan;
 import hello.core.AutoAppConfig;
 import hello.core.member.MemberRepository;
 import hello.core.member.MemberService;
-import static org.junit.Assert.*;
+
 
 import hello.core.order.OrderServiceImple;
 import org.assertj.core.api.Assertions;
