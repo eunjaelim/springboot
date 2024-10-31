@@ -1,6 +1,7 @@
 package jpql;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import javax.persistence.*;
@@ -8,6 +9,7 @@ import javax.persistence.*;
 @Entity
 @Getter
 @Setter
+@NoArgsConstructor
 public class Member1 {
 
     @Id
@@ -21,4 +23,18 @@ public class Member1 {
     @JoinColumn(name = "TEAM_ID")
     private Team team;
 
+    public Member1(Long id, String username, int age) {
+        this.id = id;
+        this.username = username;
+        this.age = age;
+    }
+
+    @Override
+    public String toString() {
+        return "Member1{" +
+                "id=" + id +
+                ", username='" + username + '\'' +
+                ", age=" + age +
+                '}';
+    }
 }
